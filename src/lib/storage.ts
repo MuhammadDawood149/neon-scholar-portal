@@ -42,9 +42,9 @@ export const initializeStorage = () => {
 
   if (!localStorage.getItem(STORAGE_KEYS.COURSES)) {
     const defaultCourses: Course[] = [
-      { id: '1', name: 'Mathematics', code: 'MATH101', teacherId: '2' },
-      { id: '2', name: 'Physics', code: 'PHY101', teacherId: '2' },
-      { id: '3', name: 'Chemistry', code: 'CHEM101', teacherId: '2' },
+      { id: '1', name: 'Mathematics', code: 'MATH101', teacherId: '2', studentsEnrolled: ['3'] },
+      { id: '2', name: 'Physics', code: 'PHY101', teacherId: '2', studentsEnrolled: ['3'] },
+      { id: '3', name: 'Chemistry', code: 'CHEM101', teacherId: '2', studentsEnrolled: ['3'] },
     ];
     localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(defaultCourses));
   }
@@ -130,6 +130,11 @@ export const saveCourse = (course: Course) => {
   } else {
     courses.push(course);
   }
+  localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(courses));
+};
+
+export const deleteCourse = (courseId: string) => {
+  const courses = getCourses().filter(c => c.id !== courseId);
   localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(courses));
 };
 

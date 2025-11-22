@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, ClipboardList, BarChart3, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, ClipboardList, BarChart3, LogOut, BookOpen, UserPlus, UsersRound } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { getAuthUser, logout } from '@/lib/auth';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,9 @@ export const Sidebar = () => {
   const adminLinks = [
     { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/admin/users', icon: Users, label: 'Manage Users' },
+    { to: '/admin/courses', icon: BookOpen, label: 'Manage Courses' },
+    { to: '/admin/assign-teacher', icon: UserPlus, label: 'Assign Teacher' },
+    { to: '/admin/assign-students', icon: UsersRound, label: 'Assign Students' },
     { to: '/admin/records', icon: FileText, label: 'View Records' },
   ];
 

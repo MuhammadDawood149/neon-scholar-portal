@@ -23,11 +23,22 @@ const UploadResults = () => {
     const allCourses = getCourses();
     const teacherCourses = allCourses.filter(c => c.teacherId === user?.id);
     setCourses(teacherCourses);
-
-    const allUsers = getUsers();
-    const allStudents = allUsers.filter(u => u.role === 'student');
-    setStudents(allStudents);
   }, [user]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      const course = courses.find(c => c.id === selectedCourse);
+      if (course) {
+        const allUsers = getUsers();
+        const enrolledStudents = allUsers.filter(
+          u => u.role === 'student' && course.studentsEnrolled.includes(u.id)
+        );
+        setStudents(enrolledStudents);
+      }
+    } else {
+      setStudents([]);
+    }
+  }, [selectedCourse, courses]);
 
   const handleSave = () => {
     if (!selectedCourse || !assessment || !maxMarks) {

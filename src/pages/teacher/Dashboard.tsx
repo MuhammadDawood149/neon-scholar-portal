@@ -19,14 +19,22 @@ const TeacherDashboard = () => {
     const attendance = getAttendanceRecords();
     const results = getResultRecords();
 
+    const teacherCourses = courses.filter(c => c.teacherId === user?.id);
+    const teacherCourseIds = teacherCourses.map(c => c.id);
+
     const today = new Date().toISOString().split('T')[0];
-    const todayAttendance = attendance.filter(a => a.date === today);
+    const todayAttendance = attendance.filter(a => a.date === today && teacherCourseIds.includes(a.courseId));
+
+    const allEnrolledStudents = new Set<string>();
+    teacherCourses.forEach(course => {
+      course.studentsEnrolled.forEach(studentId => allEnrolledStudents.add(studentId));
+    });
 
     setStats({
-      coursesAssigned: courses.filter(c => c.teacherId === user?.id).length,
+      coursesAssigned: teacherCourses.length,
       attendanceMarked: todayAttendance.length,
-      resultsUploaded: results.length,
-      totalStudents: new Set(attendance.map(a => a.studentId)).size,
+      resultsUploaded: results.filter(r => teacherCourseIds.includes(r.courseId)).length,
+      totalStudents: allEnrolledStudents.size,
     });
   }, [user]);
 
