@@ -12,6 +12,9 @@ import NotFound from "./pages/NotFound";
 // Admin
 import AdminDashboard from "./pages/admin/Dashboard";
 import ManageUsers from "./pages/admin/Users";
+import ManageCourses from "./pages/admin/Courses";
+import AssignTeacher from "./pages/admin/AssignTeacher";
+import AssignStudents from "./pages/admin/AssignStudents";
 import ViewRecords from "./pages/admin/Records";
 
 // Teacher
@@ -40,6 +43,9 @@ const App = () => (
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<ManageUsers />} />
+          <Route path="/admin/courses" element={<ManageCourses />} />
+          <Route path="/admin/assign-teacher" element={<AssignTeacher />} />
+          <Route path="/admin/assign-students" element={<AssignStudents />} />
           <Route path="/admin/records" element={<ViewRecords />} />
 
           {/* Teacher Routes */}
