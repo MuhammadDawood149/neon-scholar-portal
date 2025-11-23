@@ -21,11 +21,13 @@ import ViewRecords from "./pages/admin/Records";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import MarkAttendance from "./pages/teacher/Attendance";
 import UploadResults from "./pages/teacher/Results";
+import TeacherCourses from "./pages/teacher/Courses";
 
 // Student
 import StudentDashboard from "./pages/student/Dashboard";
 import StudentAttendance from "./pages/student/Attendance";
 import StudentResults from "./pages/student/Results";
+import StudentCourses from "./pages/student/Courses";
 
 const queryClient = new QueryClient();
 
@@ -50,11 +52,13 @@ const App = () => (
 
           {/* Teacher Routes */}
           <Route path="/teacher" element={<TeacherDashboard />} />
+          <Route path="/teacher/courses" element={<TeacherCourses />} />
           <Route path="/teacher/attendance" element={<MarkAttendance />} />
           <Route path="/teacher/results" element={<UploadResults />} />
 
           {/* Student Routes */}
           <Route path="/student" element={<StudentDashboard />} />
+          <Route path="/student/courses" element={<StudentCourses />} />
           <Route path="/student/attendance" element={<StudentAttendance />} />
           <Route path="/student/results" element={<StudentResults />} />
 
