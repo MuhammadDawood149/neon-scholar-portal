@@ -147,7 +147,7 @@ const ManageCourses = () => {
                   <TableCell className="font-medium">{course.code}</TableCell>
                   <TableCell>{course.name}</TableCell>
                   <TableCell>{getTeacherName(course.teacherId)}</TableCell>
-                  <TableCell>{course.studentsEnrolled.length}</TableCell>
+                  <TableCell>{course.studentsEnrolled?.length || 0}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
