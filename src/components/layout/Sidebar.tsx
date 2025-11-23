@@ -24,12 +24,14 @@ export const Sidebar = () => {
 
   const teacherLinks = [
     { to: '/teacher', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/teacher/courses', icon: BookOpen, label: 'My Courses' },
     { to: '/teacher/attendance', icon: ClipboardList, label: 'Mark Attendance' },
     { to: '/teacher/results', icon: BarChart3, label: 'Upload Results' },
   ];
 
   const studentLinks = [
     { to: '/student', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/student/courses', icon: BookOpen, label: 'My Courses' },
     { to: '/student/attendance', icon: ClipboardList, label: 'My Attendance' },
     { to: '/student/results', icon: BarChart3, label: 'My Results' },
   ];
