@@ -1,7 +1,9 @@
 import { User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getAuthUser, logout } from '@/lib/auth';
+import { getUsers } from '@/lib/storage';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +15,25 @@ import {
 
 export const Navbar = () => {
   const navigate = useNavigate();
-  const user = getAuthUser();
+  const authUser = getAuthUser();
+  const [user, setUser] = useState(authUser);
+
+  useEffect(() => {
+    if (authUser) {
+      const users = getUsers();
+      const fullUser = users.find(u => u.id === authUser.id);
+      if (fullUser) setUser(fullUser);
+    }
+  }, [authUser]);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   const handleLogout = () => {
     logout();
@@ -36,8 +56,14 @@ export const Navbar = () => {
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="rounded-full neon-glow">
-                <User className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="rounded-full p-0 w-10 h-10 border-2 border-primary/30 overflow-hidden shadow-[0_0_6px_rgba(58,180,255,0.3)] hover:scale-105 transition-transform">
+                {user.profileImage && user.profileImage !== 'default' ? (
+                  <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-sm font-heading text-primary">
+                    {getInitials(user.name)}
+                  </span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-card border-border">

@@ -19,6 +19,7 @@ export const initializeStorage = () => {
         role: 'admin',
         name: 'Admin User',
         email: 'admin@portal.com',
+        profileImage: 'default',
       },
       {
         id: '2',
@@ -27,6 +28,7 @@ export const initializeStorage = () => {
         role: 'teacher',
         name: 'John Smith',
         email: 'john@portal.com',
+        profileImage: 'default',
       },
       {
         id: '3',
@@ -35,6 +37,7 @@ export const initializeStorage = () => {
         role: 'student',
         name: 'Alice Johnson',
         email: 'alice@portal.com',
+        profileImage: 'default',
       },
     ];
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(defaultUsers));
