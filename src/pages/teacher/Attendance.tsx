@@ -27,10 +27,10 @@ const MarkAttendance = () => {
     if (selectedCourse) {
       const course = courses.find(c => c.id === selectedCourse);
       if (course) {
-        const allUsers = getUsers();
-        const enrolledStudents = allUsers.filter(
-          u => u.role === 'student' && course.studentsEnrolled.includes(u.id)
-        );
+      const allUsers = getUsers();
+      const enrolledStudents = allUsers.filter(
+        u => u.role === 'student' && (course.studentsEnrolled || []).includes(u.id)
+      );
         setStudents(enrolledStudents);
       }
     } else {
