@@ -1,12 +1,13 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatsCard } from '@/components/ui/stats-card';
-import { BookOpen, ClipboardCheck, BarChart3, TrendingUp } from 'lucide-react';
-import { getCourses, getAttendanceRecords, getResultRecords } from '@/lib/storage';
+import { BookOpen, ClipboardCheck, BarChart3, TrendingUp, User as UserIcon } from 'lucide-react';
+import { getCourses, getAttendanceRecords, getResultRecords, getUsers } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 
 const TeacherDashboard = () => {
-  const user = getAuthUser();
+  const authUser = getAuthUser();
+  const [user, setUser] = useState(authUser);
   const [stats, setStats] = useState({
     coursesAssigned: 0,
     attendanceMarked: 0,
@@ -15,11 +16,28 @@ const TeacherDashboard = () => {
   });
 
   useEffect(() => {
+    if (authUser) {
+      const users = getUsers();
+      const fullUser = users.find(u => u.id === authUser.id);
+      if (fullUser) setUser(fullUser);
+    }
+  }, [authUser]);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  useEffect(() => {
     const courses = getCourses();
     const attendance = getAttendanceRecords();
     const results = getResultRecords();
 
-    const teacherCourses = courses.filter(c => c.teacherId === user?.id);
+    const teacherCourses = courses.filter(c => c.teacherId === authUser?.id);
     const teacherCourseIds = teacherCourses.map(c => c.id);
 
     const today = new Date().toISOString().split('T')[0];
@@ -36,14 +54,25 @@ const TeacherDashboard = () => {
       resultsUploaded: results.filter(r => teacherCourseIds.includes(r.courseId)).length,
       totalStudents: allEnrolledStudents.size,
     });
-  }, [user]);
+  }, [authUser]);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-heading font-bold mb-2">Teacher Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, {user?.name}</p>
+        <div className="flex items-center gap-6">
+          <div className="relative w-24 h-24 rounded-full border-2 border-primary/30 overflow-hidden bg-card flex items-center justify-center shadow-[0_0_8px_rgba(58,180,255,0.4)] hover:scale-105 transition-transform">
+            {user?.profileImage && user.profileImage !== 'default' ? (
+              <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-3xl font-heading text-primary">
+                {user?.name ? getInitials(user.name) : <UserIcon className="h-12 w-12" />}
+              </span>
+            )}
+          </div>
+          <div>
+            <h1 className="text-3xl font-heading font-bold mb-2">Teacher Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back, {user?.name}</p>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

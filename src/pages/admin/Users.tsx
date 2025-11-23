@@ -20,8 +20,10 @@ const ManageUsers = () => {
     name: '',
     email: '',
     role: 'student' as UserRole,
+    profileImage: 'default',
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string>('default');
 
   useEffect(() => {
     loadUsers();
@@ -50,7 +52,9 @@ const ManageUsers = () => {
     setFormData({
       ...user,
       email: user.email || '',
+      profileImage: user.profileImage || 'default',
     });
+    setImagePreview(user.profileImage || 'default');
     setIsEditing(true);
   };
 
@@ -70,8 +74,42 @@ const ManageUsers = () => {
       name: '',
       email: '',
       role: 'student',
+      profileImage: 'default',
     });
+    setImagePreview('default');
     setIsEditing(false);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormData({ ...formData, profileImage: base64String });
+      setImagePreview(base64String);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setFormData({ ...formData, profileImage: 'default' });
+    setImagePreview('default');
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -142,6 +180,34 @@ const ManageUsers = () => {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="bg-muted border-border"
                 />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="profileImage">Upload Profile Picture</Label>
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="relative w-20 h-20 rounded-full border-2 border-primary/30 overflow-hidden bg-card flex items-center justify-center shadow-[0_0_6px_rgba(58,180,255,0.3)] hover:scale-103 transition-transform">
+                    {imagePreview === 'default' ? (
+                      <span className="text-2xl font-heading text-primary">
+                        {formData.name ? getInitials(formData.name) : '?'}
+                      </span>
+                    ) : (
+                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      id="profileImage"
+                      type="file"
+                      accept=".jpg,.jpeg,.png"
+                      onChange={handleImageUpload}
+                      className="mb-2 bg-muted border-border"
+                    />
+                    {imagePreview !== 'default' && (
+                      <Button type="button" variant="ghost" size="sm" onClick={removeImage} className="text-destructive">
+                        Remove Picture
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex gap-2">

@@ -1,12 +1,13 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
-import { getAttendanceRecords, getResultRecords } from '@/lib/storage';
+import { getAttendanceRecords, getResultRecords, getUsers } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, TrendingUp } from 'lucide-react';
+import { CheckCircle2, XCircle, TrendingUp, User as UserIcon } from 'lucide-react';
 
 const StudentDashboard = () => {
-  const user = getAuthUser();
+  const authUser = getAuthUser();
+  const [user, setUser] = useState(authUser);
   const [stats, setStats] = useState({
     attendancePercentage: 0,
     totalClasses: 0,
@@ -15,10 +16,27 @@ const StudentDashboard = () => {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (authUser) {
+      const users = getUsers();
+      const fullUser = users.find(u => u.id === authUser.id);
+      if (fullUser) setUser(fullUser);
+    }
+  }, [authUser]);
 
-    const attendance = getAttendanceRecords().filter(a => a.studentId === user.id);
-    const results = getResultRecords().filter(r => r.studentId === user.id);
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    const attendance = getAttendanceRecords().filter(a => a.studentId === authUser.id);
+    const results = getResultRecords().filter(r => r.studentId === authUser.id);
 
     const present = attendance.filter(a => a.status === 'present').length;
     const total = attendance.length;
@@ -34,14 +52,25 @@ const StudentDashboard = () => {
       present,
       latestGrade: latestResult?.grade || '-',
     });
-  }, [user]);
+  }, [authUser]);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-heading font-bold mb-2">Welcome, {user?.name}</h1>
-          <p className="text-muted-foreground">Here's your academic overview</p>
+        <div className="flex items-center gap-6">
+          <div className="relative w-24 h-24 rounded-full border-2 border-primary/30 overflow-hidden bg-card flex items-center justify-center shadow-[0_0_8px_rgba(58,180,255,0.4)] hover:scale-105 transition-transform">
+            {user?.profileImage && user.profileImage !== 'default' ? (
+              <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-3xl font-heading text-primary">
+                {user?.name ? getInitials(user.name) : <UserIcon className="h-12 w-12" />}
+              </span>
+            )}
+          </div>
+          <div>
+            <h1 className="text-3xl font-heading font-bold mb-2">Welcome, {user?.name}</h1>
+            <p className="text-muted-foreground">Here's your academic overview</p>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

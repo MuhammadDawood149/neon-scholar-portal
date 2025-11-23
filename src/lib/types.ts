@@ -7,6 +7,7 @@ export interface User {
   role: UserRole;
   name: string;
   email?: string;
+  profileImage?: string;
 }
 
 export interface Student extends User {
