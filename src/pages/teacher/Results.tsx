@@ -31,7 +31,7 @@ const UploadResults = () => {
       if (course) {
         const allUsers = getUsers();
         const enrolledStudents = allUsers.filter(
-          u => u.role === 'student' && course.studentsEnrolled.includes(u.id)
+          u => u.role === 'student' && (course.studentsEnrolled || []).includes(u.id)
         );
         setStudents(enrolledStudents);
       }
