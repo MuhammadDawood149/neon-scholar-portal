@@ -45,7 +45,7 @@ const TeacherDashboard = () => {
 
     const allEnrolledStudents = new Set<string>();
     teacherCourses.forEach(course => {
-      course.studentsEnrolled.forEach(studentId => allEnrolledStudents.add(studentId));
+      (course.studentsEnrolled || []).forEach(studentId => allEnrolledStudents.add(studentId));
     });
 
     setStats({
