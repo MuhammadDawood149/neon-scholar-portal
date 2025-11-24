@@ -38,18 +38,25 @@ const StudentDashboard = () => {
     const attendance = getAttendanceRecords().filter(a => a.studentId === authUser.id);
     const results = getResultRecords().filter(r => r.studentId === authUser.id);
 
-    const present = attendance.filter(a => a.status === 'present').length;
-    const total = attendance.length;
-    const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+    // Count total attendance records
+    let totalClasses = 0;
+    let presentCount = 0;
+    attendance.forEach(record => {
+      record.records.forEach(rec => {
+        totalClasses++;
+        if (rec.status === 'present') presentCount++;
+      });
+    });
 
-    const latestResult = results.sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    )[0];
+    const percentage = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 100) : 0;
+
+    // Get latest grade from results
+    const latestResult = results.length > 0 ? results[results.length - 1] : null;
 
     setStats({
       attendancePercentage: percentage,
-      totalClasses: total,
-      present,
+      totalClasses,
+      present: presentCount,
       latestGrade: latestResult?.grade || '-',
     });
   }, [authUser]);

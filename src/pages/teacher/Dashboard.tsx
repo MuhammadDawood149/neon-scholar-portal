@@ -43,7 +43,14 @@ const TeacherDashboard = () => {
     const teacherCourseIds = teacherCourses.map(c => c.id);
 
     const today = new Date().toISOString().split('T')[0];
-    const todayAttendance = attendance.filter(a => a.date === today && teacherCourseIds.includes(a.courseId));
+    // Count attendance records for today
+    let todayAttendanceCount = 0;
+    attendance.forEach(record => {
+      if (teacherCourseIds.includes(record.courseId)) {
+        const todayRecord = record.records.find(r => r.date === today);
+        if (todayRecord) todayAttendanceCount++;
+      }
+    });
 
     // Count only valid students across all courses
     const allValidStudents = new Set<string>();
@@ -54,7 +61,7 @@ const TeacherDashboard = () => {
 
     setStats({
       coursesAssigned: teacherCourses.length,
-      attendanceMarked: todayAttendance.length,
+      attendanceMarked: todayAttendanceCount,
       resultsUploaded: results.filter(r => teacherCourseIds.includes(r.courseId)).length,
       totalStudents: allValidStudents.size,
     });

@@ -54,14 +54,7 @@ const MarkAttendance = () => {
     const today = new Date().toISOString().split('T')[0];
     
     students.forEach(student => {
-      const record: AttendanceRecord = {
-        id: `${student.id}-${selectedCourse}-${today}`,
-        studentId: student.id,
-        courseId: selectedCourse,
-        date: today,
-        status: attendance[student.id] || 'absent',
-      };
-      saveAttendance(record);
+      saveAttendance(selectedCourse, student.id, today, attendance[student.id] || 'absent');
     });
 
     toast.success('Attendance saved successfully');
