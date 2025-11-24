@@ -1,38 +1,59 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getResultRecords, getCourses } from '@/lib/storage';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getResultRecords, getCourses, getUsers } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
-import { ResultRecord, Course } from '@/lib/types';
-import { Trophy, TrendingUp } from 'lucide-react';
+import { TrendingUp, Award } from 'lucide-react';
 
 const StudentResults = () => {
-  const user = getAuthUser();
-  const [results, setResults] = useState<ResultRecord[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [totals, setTotals] = useState({ marks: 0, maxMarks: 0 });
+  const authUser = getAuthUser();
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [courseResult, setCourseResult] = useState<any>(null);
+  const [classAverage, setClassAverage] = useState(0);
 
   useEffect(() => {
-    if (!user) return;
+    if (!authUser) return;
 
-    const records = getResultRecords().filter(r => r.studentId === user.id);
-    setResults(records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    setCourses(getCourses());
+    const allCourses = getCourses();
+    const results = getResultRecords();
+    
+    // Get courses where student has results
+    const studentResults = results.filter(r => r.studentId === authUser.id);
+    const coursesWithResults = allCourses.filter(c => 
+      studentResults.some(r => r.courseId === c.id)
+    );
+    
+    setCourses(coursesWithResults);
+    
+    // Auto-select first course if available
+    if (coursesWithResults.length > 0 && !selectedCourse) {
+      setSelectedCourse(coursesWithResults[0].id);
+    }
+  }, [authUser, selectedCourse]);
 
-    const totalMarks = records.reduce((sum, r) => sum + r.marks, 0);
-    const totalMax = records.reduce((sum, r) => sum + r.maxMarks, 0);
-    setTotals({ marks: totalMarks, maxMarks: totalMax });
-  }, [user]);
+  useEffect(() => {
+    if (!authUser || !selectedCourse) return;
 
-  const getCourseName = (courseId: string) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? `${course.name} (${course.code})` : courseId;
-  };
+    const results = getResultRecords();
+    const studentResult = results.find(
+      r => r.studentId === authUser.id && r.courseId === selectedCourse
+    );
 
-  const overallPercentage = totals.maxMarks > 0 
-    ? Math.round((totals.marks / totals.maxMarks) * 100) 
-    : 0;
+    setCourseResult(studentResult || null);
+
+    // Calculate class average
+    const courseResults = results.filter(r => r.courseId === selectedCourse);
+    if (courseResults.length > 0) {
+      const average = courseResults.reduce((sum, r) => sum + r.total, 0) / courseResults.length;
+      setClassAverage(Math.round(average));
+    } else {
+      setClassAverage(0);
+    }
+  }, [authUser, selectedCourse]);
+
+  const selectedCourseData = courses.find(c => c.id === selectedCourse);
 
   return (
     <DashboardLayout>
@@ -42,112 +63,132 @@ const StudentResults = () => {
           <p className="text-muted-foreground">View your academic performance and grades</p>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card className="p-6 neon-glow">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-primary" />
+        {courses.length > 0 ? (
+          <>
+            {/* Course Selection */}
+            <Card className="p-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Course</label>
+                <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                  <SelectTrigger className="bg-muted border-border">
+                    <SelectValue placeholder="Choose a course" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {courses.map(course => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.name} ({course.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Overall Score</p>
-                <p className="text-2xl font-heading font-bold">
-                  {totals.marks}/{totals.maxMarks}
-                </p>
-              </div>
+            </Card>
+
+            {/* Results Display */}
+            {courseResult && (
+              <>
+                {/* Summary Cards */}
+                <div className="grid gap-6 md:grid-cols-3">
+                  <Card className="p-6 neon-glow">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Award className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Final Grade</p>
+                        <p className="text-3xl font-heading font-bold text-primary">{courseResult.grade}</p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-6 neon-glow-secondary">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center">
+                        <TrendingUp className="h-6 w-6 text-secondary" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Score</p>
+                        <p className="text-3xl font-heading font-bold">{courseResult.total}/100</p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Class Average</p>
+                      <p className="text-3xl font-heading font-bold">{classAverage}%</p>
+                      <p className="text-sm mt-1">
+                        <span className={courseResult.total >= classAverage ? 'text-primary' : 'text-destructive'}>
+                          {courseResult.total >= classAverage ? '↑' : '↓'} 
+                          {' '}{Math.abs(courseResult.total - classAverage)} points
+                        </span>
+                      </p>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Assessment Breakdown */}
+                <Card className="p-6">
+                  <h2 className="text-xl font-heading font-semibold mb-6">
+                    {selectedCourseData?.name} - Assessment Breakdown
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    {courseResult.assessments.map((assessment: any, index: number) => (
+                      <div key={index} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold">{assessment.type}</h3>
+                            <p className="text-sm text-muted-foreground">Weight: {assessment.weight}%</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold">{assessment.obtained}</p>
+                            <p className="text-sm text-muted-foreground">out of {assessment.weight}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="mt-3 h-3 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 neon-glow"
+                            style={{ width: `${(assessment.obtained / assessment.weight) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 text-right">
+                          {Math.round((assessment.obtained / assessment.weight) * 100)}%
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Total Section */}
+                  <div className="mt-6 p-6 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-heading font-bold">Total Score</h3>
+                        <p className="text-sm text-muted-foreground mt-1">Final assessment total</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-4xl font-heading font-bold text-primary">{courseResult.total}/100</p>
+                        <p className="text-xl font-semibold mt-1">Grade: {courseResult.grade}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+          </>
+        ) : (
+          <Card className="p-12">
+            <div className="text-center">
+              <TrendingUp className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <p className="text-xl text-muted-foreground">No results available yet</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Results will appear here once your teacher uploads them
+              </p>
             </div>
           </Card>
-
-          <Card className="p-6 neon-glow-secondary">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-secondary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Percentage</p>
-                <p className="text-2xl font-heading font-bold">{overallPercentage}%</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <span className="text-2xl font-heading font-bold text-primary">
-                  {results.length > 0 ? results[0].grade : '-'}
-                </span>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Latest Grade</p>
-                <p className="text-xl font-heading font-bold">
-                  {results.length > 0 ? results[0].assessment : '-'}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Results Table */}
-        <Card className="p-6">
-          <h2 className="text-xl font-heading font-semibold mb-4">Assessment Results</h2>
-          <div className="rounded-md border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead>Date</TableHead>
-                  <TableHead>Course</TableHead>
-                  <TableHead>Assessment</TableHead>
-                  <TableHead>Marks</TableHead>
-                  <TableHead>Percentage</TableHead>
-                  <TableHead>Grade</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No results found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  results.map((record) => {
-                    const percentage = Math.round((record.marks / record.maxMarks) * 100);
-                    return (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
-                          {new Date(record.date).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell>{getCourseName(record.courseId)}</TableCell>
-                        <TableCell>{record.assessment}</TableCell>
-                        <TableCell>
-                          {record.marks}/{record.maxMarks}
-                        </TableCell>
-                        <TableCell>
-                          <span className={`font-semibold ${
-                            percentage >= 75 ? 'text-primary' : 
-                            percentage >= 50 ? 'text-secondary' : 
-                            'text-destructive'
-                          }`}>
-                            {percentage}%
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-                            {record.grade}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+        )}
       </div>
     </DashboardLayout>
   );

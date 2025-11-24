@@ -23,22 +23,26 @@ export interface Teacher extends User {
 }
 
 export interface AttendanceRecord {
-  id: string;
-  studentId: string;
   courseId: string;
-  date: string;
-  status: 'present' | 'absent';
+  studentId: string;
+  records: Array<{
+    date: string;
+    status: 'present' | 'absent';
+  }>;
+}
+
+export interface Assessment {
+  type: string;
+  weight: number;
+  obtained: number;
 }
 
 export interface ResultRecord {
-  id: string;
-  studentId: string;
   courseId: string;
-  assessment: string;
-  marks: number;
-  maxMarks: number;
+  studentId: string;
+  assessments: Assessment[];
+  total: number;
   grade: string;
-  date: string;
 }
 
 export interface Course {

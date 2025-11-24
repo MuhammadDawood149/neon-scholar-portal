@@ -89,15 +89,24 @@ export const getAttendanceRecords = (): AttendanceRecord[] => {
   return data ? JSON.parse(data) : [];
 };
 
-export const saveAttendance = (record: AttendanceRecord) => {
+export const saveAttendance = (courseId: string, studentId: string, date: string, status: 'present' | 'absent') => {
   const records = getAttendanceRecords();
   const index = records.findIndex(
-    r => r.studentId === record.studentId && r.courseId === record.courseId && r.date === record.date
+    r => r.studentId === studentId && r.courseId === courseId
   );
+  
+  const newRecord = { date, status };
+  
   if (index >= 0) {
-    records[index] = record;
+    // Add to existing record's history
+    records[index].records.push(newRecord);
   } else {
-    records.push(record);
+    // Create new attendance record
+    records.push({
+      courseId,
+      studentId,
+      records: [newRecord]
+    });
   }
   localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(records));
 };
@@ -110,7 +119,9 @@ export const getResultRecords = (): ResultRecord[] => {
 
 export const saveResult = (record: ResultRecord) => {
   const records = getResultRecords();
-  const index = records.findIndex(r => r.id === record.id);
+  const index = records.findIndex(
+    r => r.studentId === record.studentId && r.courseId === record.courseId
+  );
   if (index >= 0) {
     records[index] = record;
   } else {
@@ -156,13 +167,10 @@ export const setCurrentUser = (user: User | null) => {
 };
 
 // Calculate grade
-export const calculateGrade = (marks: number, maxMarks: number): string => {
-  const percentage = (marks / maxMarks) * 100;
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C';
-  if (percentage >= 40) return 'D';
+export const calculateGrade = (total: number): string => {
+  if (total >= 85) return 'A';
+  if (total >= 75) return 'B';
+  if (total >= 65) return 'C';
+  if (total >= 50) return 'D';
   return 'F';
 };

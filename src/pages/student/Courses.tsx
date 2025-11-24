@@ -38,12 +38,13 @@ const StudentCourses = () => {
     
     // Calculate attendance percentage
     const attendanceRecords = getAttendanceRecords();
-    const studentAttendance = attendanceRecords.filter(
+    const studentRecord = attendanceRecords.find(
       record => record.studentId === user?.id && record.courseId === course.id
     );
-    const presentCount = studentAttendance.filter(r => r.status === 'present').length;
-    const attendancePercentage = studentAttendance.length > 0 
-      ? Math.round((presentCount / studentAttendance.length) * 100)
+    const attendanceArray = studentRecord?.records || [];
+    const presentCount = attendanceArray.filter(r => r.status === 'present').length;
+    const attendancePercentage = attendanceArray.length > 0 
+      ? Math.round((presentCount / attendanceArray.length) * 100)
       : 0;
     
     // Get results
@@ -175,24 +176,17 @@ const StudentCourses = () => {
                       <TrendingUp className="h-5 w-5 text-primary" />
                       My Results
                     </h4>
-                    <div className="space-y-2">
-                      {courseDetails.results.map(result => (
-                        <div 
-                          key={result.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"
-                        >
-                          <div>
-                            <p className="font-medium">{result.assessment}</p>
-                            <p className="text-sm text-muted-foreground">{result.date}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-semibold">{result.marks}/{result.maxMarks}</p>
-                            <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                              {result.grade}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+                      <div>
+                        <p className="font-medium">Total Score</p>
+                        <p className="text-sm text-muted-foreground">All assessments</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{courseDetails.results[0].total}/100</p>
+                        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                          {courseDetails.results[0].grade}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}

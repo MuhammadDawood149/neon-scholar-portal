@@ -1,74 +1,145 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getUsers, getCourses, saveResult, calculateGrade } from '@/lib/storage';
+import { getCourses, getUsers, saveResult, calculateGrade } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
-import { useState, useEffect } from 'react';
-import { User, Course, ResultRecord } from '@/lib/types';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Plus, Trash2 } from 'lucide-react';
+import { getValidStudentIds } from '@/lib/utils';
+import { Assessment } from '@/lib/types';
+
+interface AssessmentTemplate {
+  type: string;
+  weight: number;
+}
 
 const UploadResults = () => {
-  const user = getAuthUser();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [students, setStudents] = useState<User[]>([]);
+  const authUser = getAuthUser();
+  const [courses, setCourses] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [assessment, setAssessment] = useState('');
-  const [maxMarks, setMaxMarks] = useState('100');
-  const [results, setResults] = useState<Record<string, string>>({});
+  const [assessmentTemplates, setAssessmentTemplates] = useState<AssessmentTemplate[]>([
+    { type: 'Quiz', weight: 10 },
+    { type: 'Assignment', weight: 10 },
+    { type: 'Midterm', weight: 30 },
+    { type: 'Final', weight: 50 }
+  ]);
+  const [studentMarks, setStudentMarks] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
     const allCourses = getCourses();
-    const teacherCourses = allCourses.filter(c => c.teacherId === user?.id);
+    const teacherCourses = allCourses.filter(c => c.teacherId === authUser?.id);
     setCourses(teacherCourses);
-  }, [user]);
+  }, [authUser]);
 
   useEffect(() => {
     if (selectedCourse) {
       const course = courses.find(c => c.id === selectedCourse);
       if (course) {
         const allUsers = getUsers();
-        const enrolledStudents = allUsers.filter(
-          u => u.role === 'student' && (course.studentsEnrolled || []).includes(u.id)
-        );
+        const validStudentIds = getValidStudentIds(course.studentsEnrolled, allUsers);
+        const enrolledStudents = allUsers.filter(u => validStudentIds.includes(u.id));
         setStudents(enrolledStudents);
+
+        // Initialize student marks
+        const initialMarks: Record<string, Record<string, number>> = {};
+        enrolledStudents.forEach(student => {
+          initialMarks[student.id] = {};
+          assessmentTemplates.forEach(template => {
+            initialMarks[student.id][template.type] = 0;
+          });
+        });
+        setStudentMarks(initialMarks);
       }
-    } else {
-      setStudents([]);
     }
-  }, [selectedCourse, courses]);
+  }, [selectedCourse, courses, assessmentTemplates]);
+
+  const addAssessment = () => {
+    setAssessmentTemplates([...assessmentTemplates, { type: '', weight: 0 }]);
+  };
+
+  const removeAssessment = (index: number) => {
+    const newTemplates = assessmentTemplates.filter((_, i) => i !== index);
+    setAssessmentTemplates(newTemplates);
+  };
+
+  const updateAssessmentTemplate = (index: number, field: 'type' | 'weight', value: string | number) => {
+    const newTemplates = [...assessmentTemplates];
+    newTemplates[index] = { ...newTemplates[index], [field]: value };
+    setAssessmentTemplates(newTemplates);
+  };
+
+  const updateStudentMark = (studentId: string, assessmentType: string, marks: number) => {
+    setStudentMarks(prev => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [assessmentType]: marks
+      }
+    }));
+  };
+
+  const getTotalWeight = () => {
+    return assessmentTemplates.reduce((sum, template) => sum + Number(template.weight), 0);
+  };
+
+  const getStudentTotal = (studentId: string) => {
+    return Object.values(studentMarks[studentId] || {}).reduce((sum, mark) => sum + Number(mark), 0);
+  };
 
   const handleSave = () => {
-    if (!selectedCourse || !assessment || !maxMarks) {
-      toast.error('Please fill all required fields');
+    if (!selectedCourse) {
+      toast.error('Please select a course');
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const maxMarksNum = parseInt(maxMarks);
+    const totalWeight = getTotalWeight();
+    if (totalWeight !== 100) {
+      toast.error(`Total weight must be 100. Current total: ${totalWeight}`);
+      return;
+    }
 
-    students.forEach(student => {
-      const marks = parseInt(results[student.id] || '0');
-      const grade = calculateGrade(marks, maxMarksNum);
+    // Check if any assessment type is empty
+    const hasEmptyType = assessmentTemplates.some(t => !t.type.trim());
+    if (hasEmptyType) {
+      toast.error('All assessment types must have a name');
+      return;
+    }
 
-      const record: ResultRecord = {
-        id: `${student.id}-${selectedCourse}-${assessment}-${today}`,
-        studentId: student.id,
-        courseId: selectedCourse,
-        assessment,
-        marks,
-        maxMarks: maxMarksNum,
-        grade,
-        date: today,
-      };
-      saveResult(record);
-    });
+    try {
+      students.forEach(student => {
+        const assessments: Assessment[] = assessmentTemplates.map(template => ({
+          type: template.type,
+          weight: template.weight,
+          obtained: studentMarks[student.id][template.type] || 0
+        }));
 
-    toast.success('Results saved successfully');
-    setResults({});
-    setAssessment('');
+        const total = getStudentTotal(student.id);
+        const grade = calculateGrade(total);
+
+        saveResult({
+          courseId: selectedCourse,
+          studentId: student.id,
+          assessments,
+          total,
+          grade
+        });
+      });
+
+      toast.success('Results saved successfully!');
+      setSelectedCourse('');
+      setAssessmentTemplates([
+        { type: 'Quiz', weight: 10 },
+        { type: 'Assignment', weight: 10 },
+        { type: 'Midterm', weight: 30 },
+        { type: 'Final', weight: 50 }
+      ]);
+    } catch (error) {
+      toast.error('Failed to save results');
+    }
   };
 
   return (
@@ -80,90 +151,137 @@ const UploadResults = () => {
         </div>
 
         <Card className="p-6">
-          <div className="space-y-4 mb-6">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="course">Select Course</Label>
-                <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-                  <SelectTrigger className="bg-muted border-border">
-                    <SelectValue placeholder="Choose a course" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {courses.map(course => (
-                      <SelectItem key={course.id} value={course.id}>
-                        {course.name} ({course.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="assessment">Assessment Name</Label>
-                <Input
-                  id="assessment"
-                  placeholder="e.g., Mid-term, Final"
-                  value={assessment}
-                  onChange={(e) => setAssessment(e.target.value)}
-                  className="bg-muted border-border"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="maxMarks">Maximum Marks</Label>
-                <Input
-                  id="maxMarks"
-                  type="number"
-                  value={maxMarks}
-                  onChange={(e) => setMaxMarks(e.target.value)}
-                  className="bg-muted border-border"
-                />
-              </div>
+          <div className="space-y-6">
+            {/* Course Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Course</label>
+              <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                <SelectTrigger className="bg-muted border-border">
+                  <SelectValue placeholder="Choose a course" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {courses.map(course => (
+                    <SelectItem key={course.id} value={course.id}>
+                      {course.name} ({course.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {selectedCourse && assessment && (
-            <>
-              <div className="space-y-3">
-                <h3 className="text-lg font-heading font-semibold">Enter Marks for Students</h3>
-                {students.map(student => (
-                  <div
-                    key={student.id}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border"
-                  >
-                    <div>
-                      <p className="font-medium">{student.name}</p>
-                      <p className="text-sm text-muted-foreground">{student.email}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        type="number"
-                        placeholder="Marks"
-                        value={results[student.id] || ''}
-                        onChange={(e) => {
-                          setResults(prev => ({ ...prev, [student.id]: e.target.value }));
-                        }}
-                        className="w-24 bg-muted border-border"
-                        max={maxMarks}
-                      />
-                      <span className="text-muted-foreground">/ {maxMarks}</span>
-                      {results[student.id] && (
-                        <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-                          {calculateGrade(parseInt(results[student.id]), parseInt(maxMarks))}
-                        </span>
-                      )}
-                    </div>
+            {/* Assessment Structure */}
+            {selectedCourse && (
+              <>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-lg">Assessment Structure</h3>
+                    <Button onClick={addAssessment} size="sm" variant="outline" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add Assessment
+                    </Button>
                   </div>
-                ))}
-              </div>
 
-              <div className="mt-6">
-                <Button onClick={handleSave} className="neon-glow">
-                  Save Results
-                </Button>
-              </div>
-            </>
-          )}
+                  {assessmentTemplates.map((template, index) => (
+                    <div key={index} className="flex gap-4 items-end">
+                      <div className="flex-1 space-y-2">
+                        <label className="text-sm font-medium">Assessment Type</label>
+                        <Input
+                          value={template.type}
+                          onChange={(e) => updateAssessmentTemplate(index, 'type', e.target.value)}
+                          placeholder="e.g., Quiz, Assignment"
+                          className="bg-muted border-border"
+                        />
+                      </div>
+                      <div className="w-32 space-y-2">
+                        <label className="text-sm font-medium">Weight (%)</label>
+                        <Input
+                          type="number"
+                          value={template.weight}
+                          onChange={(e) => updateAssessmentTemplate(index, 'weight', Number(e.target.value))}
+                          min="0"
+                          max="100"
+                          className="bg-muted border-border"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => removeAssessment(index)}
+                        variant="destructive"
+                        size="icon"
+                        disabled={assessmentTemplates.length === 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="flex justify-between items-center p-4 rounded-lg bg-muted">
+                    <span className="font-semibold">Total Weight:</span>
+                    <span className={`text-lg font-bold ${getTotalWeight() === 100 ? 'text-primary' : 'text-destructive'}`}>
+                      {getTotalWeight()}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Student Marks */}
+                {students.length > 0 && getTotalWeight() === 100 && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-lg">Enter Student Marks</h3>
+                    {students.map(student => (
+                      <div key={student.id} className="p-4 rounded-lg border border-border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-sm font-semibold text-primary">
+                                {student.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-medium">{student.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Total</p>
+                            <p className="text-2xl font-bold">{getStudentTotal(student.id)}/100</p>
+                            <p className="text-sm font-semibold text-primary">
+                              Grade: {calculateGrade(getStudentTotal(student.id))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                          {assessmentTemplates.map(template => (
+                            <div key={template.type} className="space-y-1">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                {template.type} ({template.weight}%)
+                              </label>
+                              <Input
+                                type="number"
+                                value={studentMarks[student.id]?.[template.type] || 0}
+                                onChange={(e) => updateStudentMark(student.id, template.type, Number(e.target.value))}
+                                min="0"
+                                max={template.weight}
+                                className="bg-muted border-border"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {students.length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">
+                    No students enrolled in this course
+                  </p>
+                )}
+
+                {students.length > 0 && getTotalWeight() === 100 && (
+                  <Button onClick={handleSave} className="w-full neon-glow">
+                    Save Results
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </Card>
       </div>
     </DashboardLayout>
