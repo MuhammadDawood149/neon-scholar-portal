@@ -4,6 +4,7 @@ import { BookOpen, ClipboardCheck, BarChart3, TrendingUp, User as UserIcon } fro
 import { getCourses, getAttendanceRecords, getResultRecords, getUsers } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
+import { getValidStudentIds } from '@/lib/utils';
 
 const TeacherDashboard = () => {
   const authUser = getAuthUser();
@@ -36,6 +37,7 @@ const TeacherDashboard = () => {
     const courses = getCourses();
     const attendance = getAttendanceRecords();
     const results = getResultRecords();
+    const allUsers = getUsers();
 
     const teacherCourses = courses.filter(c => c.teacherId === authUser?.id);
     const teacherCourseIds = teacherCourses.map(c => c.id);
@@ -43,16 +45,18 @@ const TeacherDashboard = () => {
     const today = new Date().toISOString().split('T')[0];
     const todayAttendance = attendance.filter(a => a.date === today && teacherCourseIds.includes(a.courseId));
 
-    const allEnrolledStudents = new Set<string>();
+    // Count only valid students across all courses
+    const allValidStudents = new Set<string>();
     teacherCourses.forEach(course => {
-      (course.studentsEnrolled || []).forEach(studentId => allEnrolledStudents.add(studentId));
+      const validStudentIds = getValidStudentIds(course.studentsEnrolled, allUsers);
+      validStudentIds.forEach(studentId => allValidStudents.add(studentId));
     });
 
     setStats({
       coursesAssigned: teacherCourses.length,
       attendanceMarked: todayAttendance.length,
       resultsUploaded: results.filter(r => teacherCourseIds.includes(r.courseId)).length,
-      totalStudents: allEnrolledStudents.size,
+      totalStudents: allValidStudents.size,
     });
   }, [authUser]);
 

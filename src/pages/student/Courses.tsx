@@ -7,6 +7,7 @@ import { getAuthUser } from '@/lib/auth';
 import { getCourses, getUsers, getAttendanceRecords, getResultRecords } from '@/lib/storage';
 import { useState, useEffect } from 'react';
 import { Course, User, AttendanceRecord, ResultRecord } from '@/lib/types';
+import { countValidStudents } from '@/lib/utils';
 
 const StudentCourses = () => {
   const user = getAuthUser();
@@ -53,7 +54,7 @@ const StudentCourses = () => {
     
     setCourseDetails({
       teacher,
-      totalStudents: (course.studentsEnrolled || []).length,
+      totalStudents: countValidStudents(course.studentsEnrolled, allUsers),
       attendancePercentage,
       results: studentResults,
     });

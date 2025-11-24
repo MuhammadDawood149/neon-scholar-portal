@@ -7,6 +7,7 @@ import { getAuthUser } from '@/lib/auth';
 import { getCourses, getUsers, getAttendanceRecords, getResultRecords } from '@/lib/storage';
 import { useState, useEffect } from 'react';
 import { Course, User, AttendanceRecord, ResultRecord } from '@/lib/types';
+import { getValidStudentIds, countValidStudents } from '@/lib/utils';
 
 const TeacherCourses = () => {
   const user = getAuthUser();
@@ -33,8 +34,10 @@ const TeacherCourses = () => {
     setSelectedCourse(course);
     
     const allUsers = getUsers();
+    // Get only valid student IDs
+    const validStudentIds = getValidStudentIds(course.studentsEnrolled, allUsers);
     const enrolledStudents = allUsers.filter(
-      u => u.role === 'student' && (course.studentsEnrolled || []).includes(u.id)
+      u => u.role === 'student' && validStudentIds.includes(u.id)
     );
     setStudents(enrolledStudents);
     setIsStudentsModalOpen(true);
@@ -118,7 +121,7 @@ const TeacherCourses = () => {
                 
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                   <Users className="h-4 w-4" />
-                  <span>{(course.studentsEnrolled || []).length} Students Enrolled</span>
+                  <span>{countValidStudents(course.studentsEnrolled, getUsers())} Students Enrolled</span>
                 </div>
                 
                 <Button 
