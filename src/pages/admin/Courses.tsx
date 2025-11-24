@@ -32,6 +32,7 @@ import { Course } from '@/lib/types';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { countValidStudents } from '@/lib/utils';
 
 const ManageCourses = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -142,32 +143,35 @@ const ManageCourses = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {courses.map((course) => (
-                <TableRow key={course.id}>
-                  <TableCell className="font-medium">{course.code}</TableCell>
-                  <TableCell>{course.name}</TableCell>
-                  <TableCell>{getTeacherName(course.teacherId)}</TableCell>
-                  <TableCell>{course.studentsEnrolled?.length || 0}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEdit(course)}
-                      >
-                        <Edit className="h-4 w-4 text-primary" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openDelete(course)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {courses.map((course) => {
+                const allUsers = getUsers();
+                return (
+                  <TableRow key={course.id}>
+                    <TableCell className="font-medium">{course.code}</TableCell>
+                    <TableCell>{course.name}</TableCell>
+                    <TableCell>{getTeacherName(course.teacherId)}</TableCell>
+                    <TableCell>{countValidStudents(course.studentsEnrolled, allUsers)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEdit(course)}
+                        >
+                          <Edit className="h-4 w-4 text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDelete(course)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
