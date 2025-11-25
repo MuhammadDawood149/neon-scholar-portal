@@ -71,7 +71,7 @@ const TeacherCourses = () => {
     
     setStudentInfo({
       courses: studentCourses,
-      attendance: courseAttendance,
+      attendance: studentRecord ? [studentRecord] : [],
       results: courseResults,
       attendancePercentage,
     });
