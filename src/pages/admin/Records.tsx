@@ -23,14 +23,18 @@ const ViewRecords = () => {
     attendance.forEach(record => {
       const student = allUsers.find(u => u.id === record.studentId);
       const course = courses.find(c => c.id === record.courseId);
-      record.records.forEach(rec => {
-        flattenedAttendance.push({
-          studentName: student?.name || 'Unknown',
-          course: course ? `${course.name} (${course.code})` : 'Unknown',
-          date: rec.date,
-          status: rec.status
+      
+      // Safety check: ensure records array exists
+      if (record.records && Array.isArray(record.records)) {
+        record.records.forEach(rec => {
+          flattenedAttendance.push({
+            studentName: student?.name || 'Unknown',
+            course: course ? `${course.name} (${course.code})` : 'Unknown',
+            date: rec.date,
+            status: rec.status
+          });
         });
-      });
+      }
     });
     setAttendanceData(flattenedAttendance);
 
@@ -41,9 +45,9 @@ const ViewRecords = () => {
       return {
         studentName: student?.name || 'Unknown',
         course: course ? `${course.name} (${course.code})` : 'Unknown',
-        total: result.total,
-        grade: result.grade,
-        assessments: result.assessments
+        total: result.total || 0,
+        grade: result.grade || 'N/A',
+        assessments: result.assessments || []
       };
     });
     setResultsData(processedResults);
