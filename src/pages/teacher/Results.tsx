@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCourses, getUsers, saveResult, calculateGrade } from '@/lib/storage';
+import { getCourses, getUsers, saveResult, calculateGrade, getResultRecords } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -44,12 +44,27 @@ const UploadResults = () => {
         const enrolledStudents = allUsers.filter(u => validStudentIds.includes(u.id));
         setStudents(enrolledStudents);
 
-        // Initialize student marks
+        // Load existing results from localStorage
+        const existingResults = getResultRecords();
+
+        // Initialize student marks with saved values or defaults
         const initialMarks: Record<string, Record<string, number>> = {};
         enrolledStudents.forEach(student => {
           initialMarks[student.id] = {};
+          
+          // Find existing result for this student/course
+          const existingResult = existingResults.find(
+            r => r.studentId === student.id && r.courseId === selectedCourse
+          );
+          
           assessmentTemplates.forEach(template => {
-            initialMarks[student.id][template.type] = 0;
+            // Use saved value if exists, otherwise default to 0
+            if (existingResult) {
+              const savedAssessment = existingResult.assessments.find(a => a.type === template.type);
+              initialMarks[student.id][template.type] = savedAssessment?.obtained || 0;
+            } else {
+              initialMarks[student.id][template.type] = 0;
+            }
           });
         });
         setStudentMarks(initialMarks);
@@ -161,13 +176,7 @@ const UploadResults = () => {
       });
 
       toast.success('Results saved successfully!');
-      setSelectedCourse('');
-      setAssessmentTemplates([
-        { type: 'Quiz', weight: 10 },
-        { type: 'Assignment', weight: 10 },
-        { type: 'Midterm', weight: 30 },
-        { type: 'Final', weight: 50 }
-      ]);
+      // Don't reset form - keep current course and values
     } catch (error) {
       toast.error('Failed to save results');
     }
