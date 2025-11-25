@@ -27,11 +27,11 @@ const StudentResults = () => {
     
     setCourses(coursesWithResults);
     
-    // Auto-select first course if available
+    // Auto-select first course if available (only when not already set)
     if (coursesWithResults.length > 0 && !selectedCourse) {
       setSelectedCourse(coursesWithResults[0].id);
     }
-  }, [authUser, selectedCourse]);
+  }, [authUser]); // Removed selectedCourse to prevent infinite loop
 
   useEffect(() => {
     if (!authUser || !selectedCourse) return;
@@ -134,7 +134,7 @@ const StudentResults = () => {
                   </h2>
                   
                   <div className="space-y-4">
-                    {courseResult.assessments.map((assessment: any, index: number) => (
+                    {(courseResult.assessments && Array.isArray(courseResult.assessments)) ? courseResult.assessments.map((assessment: any, index: number) => (
                       <div key={index} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
                         <div className="flex items-center justify-between mb-2">
                           <div>
@@ -158,7 +158,9 @@ const StudentResults = () => {
                           {Math.round((assessment.obtained / assessment.weight) * 100)}%
                         </p>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="text-center text-muted-foreground py-4">No assessment data available</p>
+                    )}
                   </div>
 
                   {/* Total Section */}
