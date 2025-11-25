@@ -99,6 +99,10 @@ export const saveAttendance = (courseId: string, studentId: string, date: string
   
   if (index >= 0) {
     // Add to existing record's history
+    // Ensure records array exists (fix for corrupted data)
+    if (!records[index].records) {
+      records[index].records = [];
+    }
     records[index].records.push(newRecord);
   } else {
     // Create new attendance record
@@ -168,9 +172,9 @@ export const setCurrentUser = (user: User | null) => {
 
 // Calculate grade
 export const calculateGrade = (total: number): string => {
-  if (total >= 85) return 'A';
-  if (total >= 75) return 'B';
-  if (total >= 65) return 'C';
-  if (total >= 50) return 'D';
+  if (total >= 90) return 'A';
+  if (total >= 80) return 'B';
+  if (total >= 70) return 'C';
+  if (total >= 60) return 'D';
   return 'F';
 };
