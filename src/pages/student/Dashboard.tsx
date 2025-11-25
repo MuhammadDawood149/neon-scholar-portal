@@ -42,10 +42,13 @@ const StudentDashboard = () => {
     let totalClasses = 0;
     let presentCount = 0;
     attendance.forEach(record => {
-      record.records.forEach(rec => {
-        totalClasses++;
-        if (rec.status === 'present') presentCount++;
-      });
+      // Safety check: ensure records array exists
+      if (record.records && Array.isArray(record.records)) {
+        record.records.forEach(rec => {
+          totalClasses++;
+          if (rec.status === 'present') presentCount++;
+        });
+      }
     });
 
     const percentage = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 100) : 0;

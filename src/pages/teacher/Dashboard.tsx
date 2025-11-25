@@ -47,8 +47,11 @@ const TeacherDashboard = () => {
     let todayAttendanceCount = 0;
     attendance.forEach(record => {
       if (teacherCourseIds.includes(record.courseId)) {
-        const todayRecord = record.records.find(r => r.date === today);
-        if (todayRecord) todayAttendanceCount++;
+        // Safety check: ensure records array exists
+        if (record.records && Array.isArray(record.records)) {
+          const todayRecord = record.records.find(r => r.date === today);
+          if (todayRecord) todayAttendanceCount++;
+        }
       }
     });
 

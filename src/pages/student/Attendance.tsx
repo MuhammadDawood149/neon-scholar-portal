@@ -23,15 +23,18 @@ const StudentAttendance = () => {
 
     records.forEach(record => {
       const course = courses.find(c => c.id === record.courseId);
-      record.records.forEach(rec => {
-        flattenedData.push({
-          date: rec.date,
-          course: course ? `${course.name} (${course.code})` : 'Unknown Course',
-          status: rec.status
+      // Safety check: ensure records array exists
+      if (record.records && Array.isArray(record.records)) {
+        record.records.forEach(rec => {
+          flattenedData.push({
+            date: rec.date,
+            course: course ? `${course.name} (${course.code})` : 'Unknown Course',
+            status: rec.status
+          });
+          totalClasses++;
+          if (rec.status === 'present') totalPresent++;
         });
-        totalClasses++;
-        if (rec.status === 'present') totalPresent++;
-      });
+      }
     });
 
     // Sort by date (newest first)
