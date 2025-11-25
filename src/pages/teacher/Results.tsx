@@ -3,31 +3,46 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { getCourses, getUsers, saveResult, calculateGrade, getResultRecords } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { getValidStudentIds } from '@/lib/utils';
-import { Assessment } from '@/lib/types';
+import { AssessmentItem, CategoryData } from '@/lib/types';
 
-interface AssessmentTemplate {
-  type: string;
-  weight: number;
+type CategoryType = 'quiz' | 'assignment' | 'midterm' | 'final';
+
+interface CategoryConfig {
+  name: string;
+  max: number;
 }
+
+const CATEGORY_CONFIG: Record<CategoryType, CategoryConfig> = {
+  quiz: { name: 'Quiz', max: 10 },
+  assignment: { name: 'Assignment', max: 10 },
+  midterm: { name: 'Midterm', max: 30 },
+  final: { name: 'Final', max: 50 },
+};
 
 const UploadResults = () => {
   const authUser = getAuthUser();
   const [courses, setCourses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [assessmentTemplates, setAssessmentTemplates] = useState<AssessmentTemplate[]>([
-    { type: 'Quiz', weight: 10 },
-    { type: 'Assignment', weight: 10 },
-    { type: 'Midterm', weight: 30 },
-    { type: 'Final', weight: 50 }
-  ]);
-  const [studentMarks, setStudentMarks] = useState<Record<string, Record<string, number>>>({});
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('quiz');
+  const [newItemTotal, setNewItemTotal] = useState<number>(0);
+  const [newItemName, setNewItemName] = useState('');
+  
+  // Store category data per student
+  const [studentCategories, setStudentCategories] = useState<Record<string, {
+    quiz: CategoryData;
+    assignment: CategoryData;
+    midterm: CategoryData;
+    final: CategoryData;
+  }>>({});
 
   useEffect(() => {
     const allCourses = getCourses();
@@ -44,96 +59,156 @@ const UploadResults = () => {
         const enrolledStudents = allUsers.filter(u => validStudentIds.includes(u.id));
         setStudents(enrolledStudents);
 
-        // Load existing results from localStorage
+        // Load existing results
         const existingResults = getResultRecords();
-
-        // Initialize student marks with saved values or defaults
-        const initialMarks: Record<string, Record<string, number>> = {};
+        
+        // Initialize student categories with saved values or defaults
+        const initialCategories: Record<string, any> = {};
         enrolledStudents.forEach(student => {
-          initialMarks[student.id] = {};
-          
-          // Find existing result for this student/course
           const existingResult = existingResults.find(
             r => r.studentId === student.id && r.courseId === selectedCourse
           );
           
-          assessmentTemplates.forEach(template => {
-            // Use saved value if exists, otherwise default to 0
-            if (existingResult) {
-              const savedAssessment = existingResult.assessments.find(a => a.type === template.type);
-              initialMarks[student.id][template.type] = savedAssessment?.obtained || 0;
-            } else {
-              initialMarks[student.id][template.type] = 0;
-            }
-          });
+          if (existingResult?.categories) {
+            // Load saved categories
+            initialCategories[student.id] = existingResult.categories;
+          } else {
+            // Initialize empty categories
+            initialCategories[student.id] = {
+              quiz: { max: 10, items: [] },
+              assignment: { max: 10, items: [] },
+              midterm: { max: 30, items: [] },
+              final: { max: 50, items: [] },
+            };
+          }
         });
-        setStudentMarks(initialMarks);
+        setStudentCategories(initialCategories);
       }
     }
-  }, [selectedCourse, courses, assessmentTemplates]);
+  }, [selectedCourse, courses]);
 
-  const addAssessment = () => {
-    const newTemplate = { type: '', weight: 0 };
-    setAssessmentTemplates([...assessmentTemplates, newTemplate]);
-    
-    // Initialize marks for this new assessment for all students
-    const updatedMarks = { ...studentMarks };
-    Object.keys(updatedMarks).forEach(studentId => {
-      updatedMarks[studentId][newTemplate.type] = 0;
-    });
-    setStudentMarks(updatedMarks);
+  const getCategoryUsedTotal = (category: CategoryType, studentId: string): number => {
+    const items = studentCategories[studentId]?.[category]?.items || [];
+    return items
+      .filter(item => item.considered)
+      .reduce((sum, item) => sum + item.total, 0);
   };
 
-  const removeAssessment = (index: number) => {
-    const removedType = assessmentTemplates[index].type;
-    const newTemplates = assessmentTemplates.filter((_, i) => i !== index);
-    setAssessmentTemplates(newTemplates);
-    
-    // Remove marks for this assessment from all students
-    const updatedMarks = { ...studentMarks };
-    Object.keys(updatedMarks).forEach(studentId => {
-      delete updatedMarks[studentId][removedType];
-    });
-    setStudentMarks(updatedMarks);
+  const getCategoryAvailableSpace = (category: CategoryType, studentId: string): number => {
+    const max = CATEGORY_CONFIG[category].max;
+    const used = getCategoryUsedTotal(category, studentId);
+    return max - used;
   };
 
-  const updateAssessmentTemplate = (index: number, field: 'type' | 'weight', value: string | number) => {
-    const oldType = assessmentTemplates[index].type;
-    const newTemplates = [...assessmentTemplates];
-    newTemplates[index] = { ...newTemplates[index], [field]: value };
-    setAssessmentTemplates(newTemplates);
-    
-    // If type changed, update all student marks to use new type key
-    if (field === 'type' && oldType !== value) {
-      const updatedMarks = { ...studentMarks };
-      Object.keys(updatedMarks).forEach(studentId => {
-        if (oldType && updatedMarks[studentId][oldType] !== undefined) {
-          updatedMarks[studentId][value as string] = updatedMarks[studentId][oldType];
-          delete updatedMarks[studentId][oldType];
-        } else {
-          updatedMarks[studentId][value as string] = 0;
-        }
+  const canAddAssessment = (category: CategoryType): boolean => {
+    // Check if all students have space in this category
+    return students.every(student => {
+      const available = getCategoryAvailableSpace(category, student.id);
+      return available > 0;
+    });
+  };
+
+  const handleAddAssessment = () => {
+    if (!selectedCourse || students.length === 0) {
+      toast.error('Please select a course with enrolled students');
+      return;
+    }
+
+    if (newItemTotal <= 0) {
+      toast.error('Assessment total marks must be greater than 0');
+      return;
+    }
+
+    // Check if all students have enough space
+    const minAvailable = Math.min(
+      ...students.map(s => getCategoryAvailableSpace(selectedCategory, s.id))
+    );
+
+    if (newItemTotal > minAvailable) {
+      toast.error(`Not enough space in ${CATEGORY_CONFIG[selectedCategory].name} category. Maximum available: ${minAvailable}`);
+      return;
+    }
+
+    // Generate assessment name
+    const categoryItems = studentCategories[students[0].id]?.[selectedCategory]?.items || [];
+    const itemNumber = categoryItems.length + 1;
+    const itemName = newItemName.trim() || `${CATEGORY_CONFIG[selectedCategory].name} ${itemNumber}`;
+    const itemId = `${selectedCategory}_${Date.now()}`;
+
+    // Add new item to all students
+    const updatedCategories = { ...studentCategories };
+    students.forEach(student => {
+      if (!updatedCategories[student.id]) {
+        updatedCategories[student.id] = {
+          quiz: { max: 10, items: [] },
+          assignment: { max: 10, items: [] },
+          midterm: { max: 30, items: [] },
+          final: { max: 50, items: [] },
+        };
+      }
+      
+      updatedCategories[student.id][selectedCategory].items.push({
+        id: itemId,
+        name: itemName,
+        total: newItemTotal,
+        obtained: 0,
+        considered: true,
       });
-      setStudentMarks(updatedMarks);
+    });
+
+    setStudentCategories(updatedCategories);
+    setIsAddDialogOpen(false);
+    setNewItemTotal(0);
+    setNewItemName('');
+    toast.success(`${itemName} added successfully!`);
+  };
+
+  const handleRemoveAssessment = (category: CategoryType, itemId: string) => {
+    const updatedCategories = { ...studentCategories };
+    students.forEach(student => {
+      if (updatedCategories[student.id]) {
+        updatedCategories[student.id][category].items = 
+          updatedCategories[student.id][category].items.filter(item => item.id !== itemId);
+      }
+    });
+    setStudentCategories(updatedCategories);
+    toast.success('Assessment removed');
+  };
+
+  const handleToggleConsidered = (studentId: string, category: CategoryType, itemId: string) => {
+    const updatedCategories = { ...studentCategories };
+    const item = updatedCategories[studentId][category].items.find(i => i.id === itemId);
+    if (item) {
+      item.considered = !item.considered;
+      setStudentCategories(updatedCategories);
     }
   };
 
-  const updateStudentMark = (studentId: string, assessmentType: string, marks: number) => {
-    setStudentMarks(prev => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        [assessmentType]: marks
-      }
-    }));
+  const handleUpdateMark = (studentId: string, category: CategoryType, itemId: string, obtained: number) => {
+    const updatedCategories = { ...studentCategories };
+    const item = updatedCategories[studentId][category].items.find(i => i.id === itemId);
+    if (item) {
+      item.obtained = Math.min(obtained, item.total); // Cap at total
+      setStudentCategories(updatedCategories);
+    }
   };
 
-  const getTotalWeight = () => {
-    return assessmentTemplates.reduce((sum, template) => sum + Number(template.weight), 0);
+  const getStudentCategoryTotal = (studentId: string, category: CategoryType): { obtained: number; total: number } => {
+    const items = studentCategories[studentId]?.[category]?.items || [];
+    const consideredItems = items.filter(item => item.considered);
+    return {
+      obtained: consideredItems.reduce((sum, item) => sum + item.obtained, 0),
+      total: consideredItems.reduce((sum, item) => sum + item.total, 0),
+    };
   };
 
-  const getStudentTotal = (studentId: string) => {
-    return Object.values(studentMarks[studentId] || {}).reduce((sum, mark) => sum + Number(mark), 0);
+  const getStudentOverallTotal = (studentId: string): number => {
+    let total = 0;
+    (['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).forEach(category => {
+      const categoryTotal = getStudentCategoryTotal(studentId, category);
+      total += categoryTotal.obtained;
+    });
+    return Math.round(total * 100) / 100; // Round to 2 decimals
   };
 
   const handleSave = () => {
@@ -142,44 +217,33 @@ const UploadResults = () => {
       return;
     }
 
-    const totalWeight = getTotalWeight();
-    if (totalWeight !== 100) {
-      toast.error(`Total weight must be 100. Current total: ${totalWeight}`);
-      return;
-    }
-
-    // Check if any assessment type is empty
-    const hasEmptyType = assessmentTemplates.some(t => !t.type.trim());
-    if (hasEmptyType) {
-      toast.error('All assessment types must have a name');
-      return;
-    }
-
     try {
       students.forEach(student => {
-        const assessments: Assessment[] = assessmentTemplates.map(template => ({
-          type: template.type,
-          weight: template.weight,
-          obtained: studentMarks[student.id][template.type] || 0
-        }));
-
-        const total = getStudentTotal(student.id);
-        const grade = calculateGrade(total);
+        const categories = studentCategories[student.id];
+        const overallTotal = getStudentOverallTotal(student.id);
+        const grade = calculateGrade(overallTotal);
 
         saveResult({
           courseId: selectedCourse,
           studentId: student.id,
-          assessments,
-          total,
-          grade
+          categories,
+          overallTotal,
+          total: overallTotal, // for backwards compatibility
+          grade,
+          assessments: [], // for backwards compatibility
         });
       });
 
       toast.success('Results saved successfully!');
-      // Don't reset form - keep current course and values
     } catch (error) {
       toast.error('Failed to save results');
     }
+  };
+
+  // Get first student's items for display (all students have same assessment structure)
+  const getAssessmentItems = (category: CategoryType): AssessmentItem[] => {
+    if (students.length === 0) return [];
+    return studentCategories[students[0].id]?.[category]?.items || [];
   };
 
   return (
@@ -209,117 +273,202 @@ const UploadResults = () => {
               </Select>
             </div>
 
-            {/* Assessment Structure */}
-            {selectedCourse && (
+            {/* Assessment Management */}
+            {selectedCourse && students.length > 0 && (
               <>
-                <div className="space-y-4">
+                {/* Category-based Assessment Structure */}
+                <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-lg">Assessment Structure</h3>
-                    <Button onClick={addAssessment} size="sm" variant="outline" className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add Assessment
-                    </Button>
-                  </div>
-
-                  {assessmentTemplates.map((template, index) => (
-                    <div key={index} className="flex gap-4 items-end">
-                      <div className="flex-1 space-y-2">
-                        <label className="text-sm font-medium">Assessment Type</label>
-                        <Input
-                          value={template.type}
-                          onChange={(e) => updateAssessmentTemplate(index, 'type', e.target.value)}
-                          placeholder="e.g., Quiz, Assignment"
-                          className="bg-muted border-border"
-                        />
-                      </div>
-                      <div className="w-32 space-y-2">
-                        <label className="text-sm font-medium">Weight (%)</label>
-                        <Input
-                          type="number"
-                          value={template.weight}
-                          onChange={(e) => updateAssessmentTemplate(index, 'weight', Number(e.target.value))}
-                          min="0"
-                          max="100"
-                          className="bg-muted border-border"
-                        />
-                      </div>
-                      <Button
-                        onClick={() => removeAssessment(index)}
-                        variant="destructive"
-                        size="icon"
-                        disabled={assessmentTemplates.length === 1}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-
-                  <div className="flex justify-between items-center p-4 rounded-lg bg-muted">
-                    <span className="font-semibold">Total Weight:</span>
-                    <span className={`text-lg font-bold ${getTotalWeight() === 100 ? 'text-primary' : 'text-destructive'}`}>
-                      {getTotalWeight()}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Student Marks */}
-                {students.length > 0 && getTotalWeight() === 100 && (
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg">Enter Student Marks</h3>
-                    {students.map(student => (
-                      <div key={student.id} className="p-4 rounded-lg border border-border space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-sm font-semibold text-primary">
-                                {student.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                              </span>
-                            </div>
-                            <span className="font-medium">{student.name}</span>
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Add Assessment
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-card border-border">
+                        <DialogHeader>
+                          <DialogTitle>Add New Assessment</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Category</label>
+                            <Select value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as CategoryType)}>
+                              <SelectTrigger className="bg-muted border-border">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {(Object.keys(CATEGORY_CONFIG) as CategoryType[]).map(cat => {
+                                  const available = students.length > 0 ? getCategoryAvailableSpace(cat, students[0].id) : 0;
+                                  return (
+                                    <SelectItem 
+                                      key={cat} 
+                                      value={cat}
+                                      disabled={available <= 0}
+                                    >
+                                      {CATEGORY_CONFIG[cat].name} (Available: {available}/{CATEGORY_CONFIG[cat].max})
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total</p>
-                            <p className="text-2xl font-bold">{getStudentTotal(student.id)}/100</p>
-                            <p className="text-sm font-semibold text-primary">
-                              Grade: {calculateGrade(getStudentTotal(student.id))}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Assessment Name (Optional)</label>
+                            <Input
+                              value={newItemName}
+                              onChange={(e) => setNewItemName(e.target.value)}
+                              placeholder="e.g., Quiz 1, Assignment 2"
+                              className="bg-muted border-border"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Total Marks</label>
+                            <Input
+                              type="number"
+                              value={newItemTotal || ''}
+                              onChange={(e) => setNewItemTotal(Number(e.target.value))}
+                              min="0"
+                              max={students.length > 0 ? getCategoryAvailableSpace(selectedCategory, students[0].id) : 0}
+                              className="bg-muted border-border"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Available space: {students.length > 0 ? getCategoryAvailableSpace(selectedCategory, students[0].id) : 0} marks
                             </p>
                           </div>
+                          <Button onClick={handleAddAssessment} className="w-full">
+                            Add Assessment
+                          </Button>
                         </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
 
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                          {assessmentTemplates.map(template => (
-                            <div key={template.type} className="space-y-1">
-                              <label className="text-xs font-medium text-muted-foreground">
-                                {template.type} ({template.weight}%)
-                              </label>
-                              <Input
-                                type="number"
-                                value={studentMarks[student.id]?.[template.type] || 0}
-                                onChange={(e) => updateStudentMark(student.id, template.type, Number(e.target.value))}
-                                min="0"
-                                max={template.weight}
-                                className="bg-muted border-border"
-                              />
+                  {/* Display Categories */}
+                  {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
+                    const items = getAssessmentItems(category);
+                    if (items.length === 0) return null;
+
+                    return (
+                      <div key={category} className="p-4 rounded-lg border border-border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold text-primary">{CATEGORY_CONFIG[category].name}</h4>
+                          <span className="text-sm text-muted-foreground">
+                            Max: {CATEGORY_CONFIG[category].max} marks
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {items.map(item => (
+                            <div key={item.id} className="flex items-center gap-2 p-2 rounded bg-muted/50">
+                              <span className="flex-1 text-sm">{item.name || 'Unnamed'}</span>
+                              <span className="text-sm text-muted-foreground">({item.total} marks)</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleRemoveAssessment(category, item.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
 
-                {students.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8">
-                    No students enrolled in this course
-                  </p>
-                )}
+                {/* Student Marks Entry */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Enter Student Marks</h3>
+                  {students.map(student => (
+                    <div key={student.id} className="p-4 rounded-lg border border-border space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-semibold text-primary">
+                              {student.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="font-medium">{student.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Total</p>
+                          <p className="text-2xl font-bold">{getStudentOverallTotal(student.id)}/100</p>
+                          <p className="text-sm font-semibold text-primary">
+                            Grade: {calculateGrade(getStudentOverallTotal(student.id))}
+                          </p>
+                        </div>
+                      </div>
 
-                {students.length > 0 && getTotalWeight() === 100 && (
-                  <Button onClick={handleSave} className="w-full neon-glow">
-                    Save Results
-                  </Button>
-                )}
+                      {/* Categories */}
+                      {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
+                        const items = studentCategories[student.id]?.[category]?.items || [];
+                        if (items.length === 0) return null;
+
+                        const categoryTotals = getStudentCategoryTotal(student.id, category);
+
+                        return (
+                          <div key={category} className="space-y-2">
+                            <div className="flex items-center justify-between px-2">
+                              <h5 className="text-sm font-semibold text-primary">{CATEGORY_CONFIG[category].name}</h5>
+                              <span className="text-sm font-medium">
+                                {categoryTotals.obtained}/{categoryTotals.total}
+                              </span>
+                            </div>
+                            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                              {items.map(item => (
+                                <div key={item.id} className="relative">
+                                  <div className={`space-y-1 p-2 rounded border ${item.considered ? 'border-border' : 'border-muted opacity-50'}`}>
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs font-medium">
+                                        {item.name} ({item.total}m)
+                                      </label>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => handleToggleConsidered(student.id, category, item.id)}
+                                      >
+                                        {item.considered ? (
+                                          <Eye className="h-3 w-3" />
+                                        ) : (
+                                          <EyeOff className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                    <Input
+                                      type="number"
+                                      value={item.obtained || 0}
+                                      onChange={(e) => handleUpdateMark(student.id, category, item.id, Number(e.target.value))}
+                                      min="0"
+                                      max={item.total}
+                                      step="0.5"
+                                      disabled={!item.considered}
+                                      className="h-8 bg-muted border-border text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                <Button onClick={handleSave} className="w-full neon-glow">
+                  Save Results
+                </Button>
               </>
+            )}
+
+            {selectedCourse && students.length === 0 && (
+              <p className="text-center text-muted-foreground py-8">
+                No students enrolled in this course
+              </p>
             )}
           </div>
         </Card>
