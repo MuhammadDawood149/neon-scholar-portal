@@ -51,10 +51,24 @@ const MarkAttendance = () => {
       return;
     }
 
+    if (students.length === 0) {
+      toast.error('No students enrolled in this course');
+      return;
+    }
+
+    // Check if at least one student has attendance marked
+    const hasMarkedAttendance = students.some(student => attendance[student.id]);
+    if (!hasMarkedAttendance) {
+      toast.error('Please mark attendance for at least one student');
+      return;
+    }
+
     const today = new Date().toISOString().split('T')[0];
     
+    // Save attendance for all students (unmarked students default to absent)
     students.forEach(student => {
-      saveAttendance(selectedCourse, student.id, today, attendance[student.id] || 'absent');
+      const status = attendance[student.id] || 'absent';
+      saveAttendance(selectedCourse, student.id, today, status);
     });
 
     toast.success('Attendance saved successfully');
