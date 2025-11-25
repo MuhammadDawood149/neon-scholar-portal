@@ -58,18 +58,49 @@ const UploadResults = () => {
   }, [selectedCourse, courses, assessmentTemplates]);
 
   const addAssessment = () => {
-    setAssessmentTemplates([...assessmentTemplates, { type: '', weight: 0 }]);
+    const newTemplate = { type: '', weight: 0 };
+    setAssessmentTemplates([...assessmentTemplates, newTemplate]);
+    
+    // Initialize marks for this new assessment for all students
+    const updatedMarks = { ...studentMarks };
+    Object.keys(updatedMarks).forEach(studentId => {
+      updatedMarks[studentId][newTemplate.type] = 0;
+    });
+    setStudentMarks(updatedMarks);
   };
 
   const removeAssessment = (index: number) => {
+    const removedType = assessmentTemplates[index].type;
     const newTemplates = assessmentTemplates.filter((_, i) => i !== index);
     setAssessmentTemplates(newTemplates);
+    
+    // Remove marks for this assessment from all students
+    const updatedMarks = { ...studentMarks };
+    Object.keys(updatedMarks).forEach(studentId => {
+      delete updatedMarks[studentId][removedType];
+    });
+    setStudentMarks(updatedMarks);
   };
 
   const updateAssessmentTemplate = (index: number, field: 'type' | 'weight', value: string | number) => {
+    const oldType = assessmentTemplates[index].type;
     const newTemplates = [...assessmentTemplates];
     newTemplates[index] = { ...newTemplates[index], [field]: value };
     setAssessmentTemplates(newTemplates);
+    
+    // If type changed, update all student marks to use new type key
+    if (field === 'type' && oldType !== value) {
+      const updatedMarks = { ...studentMarks };
+      Object.keys(updatedMarks).forEach(studentId => {
+        if (oldType && updatedMarks[studentId][oldType] !== undefined) {
+          updatedMarks[studentId][value as string] = updatedMarks[studentId][oldType];
+          delete updatedMarks[studentId][oldType];
+        } else {
+          updatedMarks[studentId][value as string] = 0;
+        }
+      });
+      setStudentMarks(updatedMarks);
+    }
   };
 
   const updateStudentMark = (studentId: string, assessmentType: string, marks: number) => {
