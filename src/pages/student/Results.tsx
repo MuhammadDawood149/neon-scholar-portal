@@ -5,13 +5,26 @@ import { getResultRecords, getCourses, getUsers } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 import { TrendingUp, Award } from 'lucide-react';
+import { CategoryData } from '@/lib/types';
+
+type CategoryType = 'quiz' | 'assignment' | 'midterm' | 'final';
+
+const CATEGORY_NAMES: Record<CategoryType, string> = {
+  quiz: 'Quizzes',
+  assignment: 'Assignments',
+  midterm: 'Midterm',
+  final: 'Final',
+};
 
 const StudentResults = () => {
   const authUser = getAuthUser();
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [courseResult, setCourseResult] = useState<any>(null);
-  const [classAverage, setClassAverage] = useState(0);
+  const [classAverages, setClassAverages] = useState<{
+    overall: number;
+    categories: Record<CategoryType, number>;
+  }>({ overall: 0, categories: { quiz: 0, assignment: 0, midterm: 0, final: 0 } });
 
   useEffect(() => {
     if (!authUser) return;
@@ -27,11 +40,11 @@ const StudentResults = () => {
     
     setCourses(coursesWithResults);
     
-    // Auto-select first course if available (only when not already set)
+    // Auto-select first course if available
     if (coursesWithResults.length > 0 && !selectedCourse) {
       setSelectedCourse(coursesWithResults[0].id);
     }
-  }, [authUser]); // Removed selectedCourse to prevent infinite loop
+  }, [authUser]);
 
   useEffect(() => {
     if (!authUser || !selectedCourse) return;
@@ -43,15 +56,50 @@ const StudentResults = () => {
 
     setCourseResult(studentResult || null);
 
-    // Calculate class average
+    // Calculate class averages
     const courseResults = results.filter(r => r.courseId === selectedCourse);
     if (courseResults.length > 0) {
-      const average = courseResults.reduce((sum, r) => sum + r.total, 0) / courseResults.length;
-      setClassAverage(Math.round(average));
+      // Overall average
+      const overallAvg = courseResults.reduce((sum, r) => sum + (r.overallTotal || r.total || 0), 0) / courseResults.length;
+      
+      // Category averages
+      const categoryAverages: Record<CategoryType, number> = {
+        quiz: 0,
+        assignment: 0,
+        midterm: 0,
+        final: 0,
+      };
+
+      (['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).forEach(category => {
+        const validResults = courseResults.filter(r => r.categories?.[category]);
+        if (validResults.length > 0) {
+          const categorySum = validResults.reduce((sum, r) => {
+            const items = r.categories[category].items || [];
+            const consideredItems = items.filter((item: any) => item.considered);
+            const obtained = consideredItems.reduce((s: number, item: any) => s + item.obtained, 0);
+            return sum + obtained;
+          }, 0);
+          categoryAverages[category] = Math.round(categorySum / validResults.length * 100) / 100;
+        }
+      });
+
+      setClassAverages({
+        overall: Math.round(overallAvg * 100) / 100,
+        categories: categoryAverages,
+      });
     } else {
-      setClassAverage(0);
+      setClassAverages({ overall: 0, categories: { quiz: 0, assignment: 0, midterm: 0, final: 0 } });
     }
   }, [authUser, selectedCourse]);
+
+  const getCategoryTotal = (category: CategoryData): { obtained: number; total: number } => {
+    const items = category?.items || [];
+    const consideredItems = items.filter(item => item.considered);
+    return {
+      obtained: consideredItems.reduce((sum, item) => sum + item.obtained, 0),
+      total: consideredItems.reduce((sum, item) => sum + item.total, 0),
+    };
+  };
 
   const selectedCourseData = courses.find(c => c.id === selectedCourse);
 
@@ -85,7 +133,7 @@ const StudentResults = () => {
             </Card>
 
             {/* Results Display */}
-            {courseResult && (
+            {courseResult && courseResult.categories && (
               <>
                 {/* Summary Cards */}
                 <div className="grid gap-6 md:grid-cols-3">
@@ -108,7 +156,7 @@ const StudentResults = () => {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Total Score</p>
-                        <p className="text-3xl font-heading font-bold">{courseResult.total}/100</p>
+                        <p className="text-3xl font-heading font-bold">{courseResult.overallTotal || courseResult.total}/100</p>
                       </div>
                     </div>
                   </Card>
@@ -116,68 +164,98 @@ const StudentResults = () => {
                   <Card className="p-6">
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Class Average</p>
-                      <p className="text-3xl font-heading font-bold">{classAverage}%</p>
+                      <p className="text-3xl font-heading font-bold">{classAverages.overall}%</p>
                       <p className="text-sm mt-1">
-                        <span className={courseResult.total >= classAverage ? 'text-primary' : 'text-destructive'}>
-                          {courseResult.total >= classAverage ? '↑' : '↓'} 
-                          {' '}{Math.abs(courseResult.total - classAverage)} points
+                        <span className={(courseResult.overallTotal || courseResult.total) >= classAverages.overall ? 'text-primary' : 'text-destructive'}>
+                          {(courseResult.overallTotal || courseResult.total) >= classAverages.overall ? '↑' : '↓'} 
+                          {' '}{Math.abs(Math.round(((courseResult.overallTotal || courseResult.total) - classAverages.overall) * 100) / 100)} points
                         </span>
                       </p>
                     </div>
                   </Card>
                 </div>
 
-                {/* Assessment Breakdown */}
+                {/* Category Breakdown */}
                 <Card className="p-6">
                   <h2 className="text-xl font-heading font-semibold mb-6">
                     {selectedCourseData?.name} - Assessment Breakdown
                   </h2>
                   
-                  <div className="space-y-4">
-                    {(courseResult.assessments && Array.isArray(courseResult.assessments)) ? courseResult.assessments.map((assessment: any, index: number) => (
-                      <div key={index} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <h3 className="font-semibold">{assessment.type}</h3>
-                            <p className="text-sm text-muted-foreground">Weight: {assessment.weight}%</p>
+                  <div className="space-y-6">
+                    {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
+                      const categoryData = courseResult.categories[category];
+                      if (!categoryData || categoryData.items.length === 0) return null;
+
+                      const categoryTotals = getCategoryTotal(categoryData);
+                      const consideredItems = categoryData.items.filter((item: any) => item.considered);
+
+                      return (
+                        <div key={category} className="space-y-3">
+                          {/* Category Header */}
+                          <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
+                            <div>
+                              <h3 className="font-semibold text-lg">{CATEGORY_NAMES[category]}</h3>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Class Average: {classAverages.categories[category]} marks
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-3xl font-bold text-primary">{categoryTotals.obtained}</p>
+                              <p className="text-sm text-muted-foreground">out of {categoryTotals.total}</p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold">{assessment.obtained}</p>
-                            <p className="text-sm text-muted-foreground">out of {assessment.weight}</p>
+
+                          {/* Individual Items */}
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {consideredItems.map((item: any, index: number) => (
+                              <div key={item.id || index} className="p-3 rounded-lg border border-border hover:border-primary/50 transition-colors">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium">{item.name || `Item ${index + 1}`}</span>
+                                  <span className="text-lg font-bold">{item.obtained}/{item.total}</span>
+                                </div>
+                                
+                                {/* Progress Bar */}
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500"
+                                    style={{ width: `${(item.obtained / item.total) * 100}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1 text-right">
+                                  {Math.round((item.obtained / item.total) * 100)}%
+                                </p>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        
-                        {/* Progress Bar */}
-                        <div className="mt-3 h-3 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 neon-glow"
-                            style={{ width: `${(assessment.obtained / assessment.weight) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 text-right">
-                          {Math.round((assessment.obtained / assessment.weight) * 100)}%
-                        </p>
-                      </div>
-                    )) : (
-                      <p className="text-center text-muted-foreground py-4">No assessment data available</p>
-                    )}
+                      );
+                    })}
                   </div>
 
-                  {/* Total Section */}
-                  <div className="mt-6 p-6 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
+                  {/* Overall Total Section */}
+                  <div className="mt-8 p-6 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-heading font-bold">Total Score</h3>
-                        <p className="text-sm text-muted-foreground mt-1">Final assessment total</p>
+                        <h3 className="text-xl font-heading font-bold">Overall Total</h3>
+                        <p className="text-sm text-muted-foreground mt-1">Combined score across all categories</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-4xl font-heading font-bold text-primary">{courseResult.total}/100</p>
+                        <p className="text-4xl font-heading font-bold text-primary">{courseResult.overallTotal || courseResult.total}/100</p>
                         <p className="text-xl font-semibold mt-1">Grade: {courseResult.grade}</p>
                       </div>
                     </div>
                   </div>
                 </Card>
               </>
+            )}
+
+            {/* Fallback for old format */}
+            {courseResult && !courseResult.categories && courseResult.assessments && (
+              <Card className="p-6">
+                <p className="text-center text-muted-foreground py-4">
+                  Results are in old format. Teacher needs to re-upload using new system.
+                </p>
+              </Card>
             )}
           </>
         ) : (
