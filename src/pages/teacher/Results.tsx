@@ -19,7 +19,7 @@ interface CategoryConfig {
   max: number;
 }
 
-const CATEGORY_CONFIG: Record<CategoryType, CategoryConfig> = {
+const DEFAULT_CATEGORY_CONFIG: Record<CategoryType, CategoryConfig> = {
   quiz: { name: 'Quiz', max: 10 },
   assignment: { name: 'Assignment', max: 10 },
   midterm: { name: 'Midterm', max: 30 },
@@ -32,6 +32,9 @@ const UploadResults = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditMaxDialogOpen, setIsEditMaxDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryType>('quiz');
+  const [editingMaxValue, setEditingMaxValue] = useState<number>(0);
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('quiz');
   const [newItemTotal, setNewItemTotal] = useState<number>(0);
   const [newItemName, setNewItemName] = useState('');
@@ -73,12 +76,12 @@ const UploadResults = () => {
             // Load saved categories
             initialCategories[student.id] = existingResult.categories;
           } else {
-            // Initialize empty categories
+            // Initialize empty categories with default max values
             initialCategories[student.id] = {
-              quiz: { max: 10, items: [] },
-              assignment: { max: 10, items: [] },
-              midterm: { max: 30, items: [] },
-              final: { max: 50, items: [] },
+              quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
+              assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
+              midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
+              final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
             };
           }
         });
@@ -95,7 +98,7 @@ const UploadResults = () => {
   };
 
   const getCategoryAvailableSpace = (category: CategoryType, studentId: string): number => {
-    const max = CATEGORY_CONFIG[category].max;
+    const max = studentCategories[studentId]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
     const used = getCategoryUsedTotal(category, studentId);
     return max - used;
   };
@@ -125,14 +128,14 @@ const UploadResults = () => {
     );
 
     if (newItemTotal > minAvailable) {
-      toast.error(`Not enough space in ${CATEGORY_CONFIG[selectedCategory].name} category. Maximum available: ${minAvailable}`);
+      toast.error(`Not enough space in ${DEFAULT_CATEGORY_CONFIG[selectedCategory].name} category. Maximum available: ${minAvailable}`);
       return;
     }
 
     // Generate assessment name
     const categoryItems = studentCategories[students[0].id]?.[selectedCategory]?.items || [];
     const itemNumber = categoryItems.length + 1;
-    const itemName = newItemName.trim() || `${CATEGORY_CONFIG[selectedCategory].name} ${itemNumber}`;
+    const itemName = newItemName.trim() || `${DEFAULT_CATEGORY_CONFIG[selectedCategory].name} ${itemNumber}`;
     const itemId = `${selectedCategory}_${Date.now()}`;
 
     // Add new item to all students
@@ -140,10 +143,10 @@ const UploadResults = () => {
     students.forEach(student => {
       if (!updatedCategories[student.id]) {
         updatedCategories[student.id] = {
-          quiz: { max: 10, items: [] },
-          assignment: { max: 10, items: [] },
-          midterm: { max: 30, items: [] },
-          final: { max: 50, items: [] },
+          quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
+          assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
+          midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
+          final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
         };
       }
       
@@ -173,6 +176,42 @@ const UploadResults = () => {
     });
     setStudentCategories(updatedCategories);
     toast.success('Assessment removed');
+  };
+
+  const handleEditCategoryMax = (category: CategoryType) => {
+    if (students.length === 0) return;
+    const currentMax = studentCategories[students[0].id]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
+    setEditingCategory(category);
+    setEditingMaxValue(currentMax);
+    setIsEditMaxDialogOpen(true);
+  };
+
+  const handleSaveCategoryMax = () => {
+    if (students.length === 0) return;
+
+    // Validate: new max must be >= total of existing assessments
+    const minRequired = students.map(student => {
+      const items = studentCategories[student.id]?.[editingCategory]?.items || [];
+      return items.reduce((sum, item) => sum + item.total, 0);
+    });
+    const maxRequired = Math.max(...minRequired);
+
+    if (editingMaxValue < maxRequired) {
+      toast.error(`New limit cannot be less than total marks of existing assessments (${maxRequired})`);
+      return;
+    }
+
+    // Update max for all students
+    const updatedCategories = { ...studentCategories };
+    students.forEach(student => {
+      if (updatedCategories[student.id]) {
+        updatedCategories[student.id][editingCategory].max = editingMaxValue;
+      }
+    });
+
+    setStudentCategories(updatedCategories);
+    setIsEditMaxDialogOpen(false);
+    toast.success(`${DEFAULT_CATEGORY_CONFIG[editingCategory].name} max updated to ${editingMaxValue}`);
   };
 
   const handleToggleConsidered = (studentId: string, category: CategoryType, itemId: string) => {
@@ -298,16 +337,17 @@ const UploadResults = () => {
                               <SelectTrigger className="bg-muted border-border">
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="bg-card border-border">
-                                {(Object.keys(CATEGORY_CONFIG) as CategoryType[]).map(cat => {
+                               <SelectContent className="bg-card border-border">
+                                {(Object.keys(DEFAULT_CATEGORY_CONFIG) as CategoryType[]).map(cat => {
                                   const available = students.length > 0 ? getCategoryAvailableSpace(cat, students[0].id) : 0;
+                                  const max = students.length > 0 ? (studentCategories[students[0].id]?.[cat]?.max || DEFAULT_CATEGORY_CONFIG[cat].max) : DEFAULT_CATEGORY_CONFIG[cat].max;
                                   return (
                                     <SelectItem 
                                       key={cat} 
                                       value={cat}
                                       disabled={available <= 0}
                                     >
-                                      {CATEGORY_CONFIG[cat].name} (Available: {available}/{CATEGORY_CONFIG[cat].max})
+                                      {DEFAULT_CATEGORY_CONFIG[cat].name} (Available: {available}/{max})
                                     </SelectItem>
                                   );
                                 })}
@@ -348,15 +388,26 @@ const UploadResults = () => {
                   {/* Display Categories */}
                   {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
                     const items = getAssessmentItems(category);
-                    if (items.length === 0) return null;
+                    const currentMax = students.length > 0 ? (studentCategories[students[0].id]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max) : DEFAULT_CATEGORY_CONFIG[category].max;
+                    const available = students.length > 0 ? getCategoryAvailableSpace(category, students[0].id) : currentMax;
 
                     return (
                       <div key={category} className="p-4 rounded-lg border border-border space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-primary">{CATEGORY_CONFIG[category].name}</h4>
-                          <span className="text-sm text-muted-foreground">
-                            Max: {CATEGORY_CONFIG[category].max} marks
-                          </span>
+                          <h4 className="font-semibold text-primary">{DEFAULT_CATEGORY_CONFIG[category].name}</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-muted-foreground">
+                              Max: {currentMax} marks | Remaining: {available}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditCategoryMax(category)}
+                              className="h-7 text-xs"
+                            >
+                              Edit Max
+                            </Button>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           {items.map(item => (
@@ -375,9 +426,38 @@ const UploadResults = () => {
                           ))}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+
+                {/* Edit Category Max Dialog */}
+                <Dialog open={isEditMaxDialogOpen} onOpenChange={setIsEditMaxDialogOpen}>
+                  <DialogContent className="bg-card border-border">
+                    <DialogHeader>
+                      <DialogTitle>Edit {DEFAULT_CATEGORY_CONFIG[editingCategory].name} Maximum Marks</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Maximum Absolute Marks</label>
+                        <Input
+                          type="number"
+                          value={editingMaxValue || ''}
+                          onChange={(e) => setEditingMaxValue(Number(e.target.value))}
+                          min="0"
+                          className="bg-muted border-border"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Current assessments total: {students.length > 0 ? 
+                            (studentCategories[students[0].id]?.[editingCategory]?.items || [])
+                              .reduce((sum, item) => sum + item.total, 0) : 0} marks
+                        </p>
+                      </div>
+                      <Button onClick={handleSaveCategoryMax} className="w-full">
+                        Save Maximum
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
                 {/* Student Marks Entry */}
                 <div className="space-y-4">
@@ -412,7 +492,7 @@ const UploadResults = () => {
                         return (
                           <div key={category} className="space-y-2">
                             <div className="flex items-center justify-between px-2">
-                              <h5 className="text-sm font-semibold text-primary">{CATEGORY_CONFIG[category].name}</h5>
+                              <h5 className="text-sm font-semibold text-primary">{DEFAULT_CATEGORY_CONFIG[category].name}</h5>
                               <span className="text-sm font-medium">
                                 {categoryTotals.obtained}/{categoryTotals.total}
                               </span>
