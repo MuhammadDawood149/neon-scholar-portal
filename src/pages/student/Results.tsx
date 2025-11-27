@@ -188,6 +188,8 @@ const StudentResults = () => {
 
                       const categoryTotals = getCategoryTotal(categoryData);
                       const consideredItems = categoryData.items.filter((item: any) => item.considered);
+                      const categoryMax = categoryData.max || 0;
+                      const remainingMarks = categoryMax - categoryTotals.total;
 
                       return (
                         <div key={category} className="space-y-3">
@@ -198,6 +200,11 @@ const StudentResults = () => {
                               <p className="text-sm text-muted-foreground mt-1">
                                 Class Average: {classAverages.categories[category]} marks
                               </p>
+                              {remainingMarks > 0 && (
+                                <p className="text-sm text-muted-foreground italic mt-1">
+                                  Remaining: {remainingMarks} marks (max: {categoryMax})
+                                </p>
+                              )}
                             </div>
                             <div className="text-right">
                               <p className="text-3xl font-bold text-primary">{categoryTotals.obtained}</p>
