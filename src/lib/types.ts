@@ -40,7 +40,7 @@ export interface Assessment {
 export interface AssessmentItem {
   id: string;
   total: number;
-  obtained: number;
+  scores: { [studentId: string]: number }; // obtained marks per student
   considered: boolean;
   name?: string; // optional name like "Quiz 1", "Assignment 2"
 }

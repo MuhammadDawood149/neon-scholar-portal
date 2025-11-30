@@ -3,12 +3,12 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { getCourses, getUsers, saveResult, calculateGrade, getResultRecords } from '@/lib/storage';
 import { getAuthUser } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, Edit2, Save } from 'lucide-react';
 import { getValidStudentIds } from '@/lib/utils';
 import { AssessmentItem, CategoryData } from '@/lib/types';
 
@@ -33,19 +33,30 @@ const UploadResults = () => {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditMaxDialogOpen, setIsEditMaxDialogOpen] = useState(false);
+  const [isEditItemDialogOpen, setIsEditItemDialogOpen] = useState(false);
+  const [isMarksDialogOpen, setIsMarksDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryType>('quiz');
   const [editingMaxValue, setEditingMaxValue] = useState<number>(0);
+  const [editingItem, setEditingItem] = useState<{ category: CategoryType; itemId: string; currentTotal: number } | null>(null);
+  const [editingItemTotal, setEditingItemTotal] = useState<number>(0);
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('quiz');
   const [newItemTotal, setNewItemTotal] = useState<number>(0);
   const [newItemName, setNewItemName] = useState('');
+  const [marksDialogData, setMarksDialogData] = useState<{ category: CategoryType; item: AssessmentItem } | null>(null);
+  const [tempMarks, setTempMarks] = useState<{ [studentId: string]: number }>({});
   
-  // Store category data per student
-  const [studentCategories, setStudentCategories] = useState<Record<string, {
+  // Shared category structure (same for all students)
+  const [categoryStructure, setCategoryStructure] = useState<{
     quiz: CategoryData;
     assignment: CategoryData;
     midterm: CategoryData;
     final: CategoryData;
-  }>>({});
+  }>({
+    quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
+    assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
+    midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
+    final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
+  });
 
   useEffect(() => {
     const allCourses = getCourses();
@@ -62,53 +73,38 @@ const UploadResults = () => {
         const enrolledStudents = allUsers.filter(u => validStudentIds.includes(u.id));
         setStudents(enrolledStudents);
 
-        // Load existing results
+        // Load existing structure from first student's result
         const existingResults = getResultRecords();
+        const firstStudentResult = existingResults.find(
+          r => r.courseId === selectedCourse && validStudentIds.includes(r.studentId)
+        );
         
-        // Initialize student categories with saved values or defaults
-        const initialCategories: Record<string, any> = {};
-        enrolledStudents.forEach(student => {
-          const existingResult = existingResults.find(
-            r => r.studentId === student.id && r.courseId === selectedCourse
-          );
-          
-          if (existingResult?.categories) {
-            // Load saved categories
-            initialCategories[student.id] = existingResult.categories;
-          } else {
-            // Initialize empty categories with default max values
-            initialCategories[student.id] = {
-              quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
-              assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
-              midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
-              final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
-            };
-          }
-        });
-        setStudentCategories(initialCategories);
+        if (firstStudentResult?.categories) {
+          setCategoryStructure(firstStudentResult.categories);
+        } else {
+          // Initialize with defaults
+          setCategoryStructure({
+            quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
+            assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
+            midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
+            final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
+          });
+        }
       }
     }
   }, [selectedCourse, courses]);
 
-  const getCategoryUsedTotal = (category: CategoryType, studentId: string): number => {
-    const items = studentCategories[studentId]?.[category]?.items || [];
+  const getCategoryUsedTotal = (category: CategoryType): number => {
+    const items = categoryStructure[category]?.items || [];
     return items
       .filter(item => item.considered)
       .reduce((sum, item) => sum + item.total, 0);
   };
 
-  const getCategoryAvailableSpace = (category: CategoryType, studentId: string): number => {
-    const max = studentCategories[studentId]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
-    const used = getCategoryUsedTotal(category, studentId);
+  const getCategoryAvailableSpace = (category: CategoryType): number => {
+    const max = categoryStructure[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
+    const used = getCategoryUsedTotal(category);
     return max - used;
-  };
-
-  const canAddAssessment = (category: CategoryType): boolean => {
-    // Check if all students have space in this category
-    return students.every(student => {
-      const available = getCategoryAvailableSpace(category, student.id);
-      return available > 0;
-    });
   };
 
   const handleAddAssessment = () => {
@@ -122,44 +118,35 @@ const UploadResults = () => {
       return;
     }
 
-    // Check if all students have enough space
-    const minAvailable = Math.min(
-      ...students.map(s => getCategoryAvailableSpace(selectedCategory, s.id))
-    );
-
-    if (newItemTotal > minAvailable) {
-      toast.error(`Not enough space in ${DEFAULT_CATEGORY_CONFIG[selectedCategory].name} category. Maximum available: ${minAvailable}`);
+    const available = getCategoryAvailableSpace(selectedCategory);
+    if (newItemTotal > available) {
+      toast.error(`Not enough space. Maximum available: ${available} marks`);
       return;
     }
 
     // Generate assessment name
-    const categoryItems = studentCategories[students[0].id]?.[selectedCategory]?.items || [];
+    const categoryItems = categoryStructure[selectedCategory]?.items || [];
     const itemNumber = categoryItems.length + 1;
     const itemName = newItemName.trim() || `${DEFAULT_CATEGORY_CONFIG[selectedCategory].name} ${itemNumber}`;
     const itemId = `${selectedCategory}_${Date.now()}`;
 
-    // Add new item to all students
-    const updatedCategories = { ...studentCategories };
+    // Initialize scores for all students (default 0)
+    const initialScores: { [studentId: string]: number } = {};
     students.forEach(student => {
-      if (!updatedCategories[student.id]) {
-        updatedCategories[student.id] = {
-          quiz: { max: DEFAULT_CATEGORY_CONFIG.quiz.max, items: [] },
-          assignment: { max: DEFAULT_CATEGORY_CONFIG.assignment.max, items: [] },
-          midterm: { max: DEFAULT_CATEGORY_CONFIG.midterm.max, items: [] },
-          final: { max: DEFAULT_CATEGORY_CONFIG.final.max, items: [] },
-        };
-      }
-      
-      updatedCategories[student.id][selectedCategory].items.push({
-        id: itemId,
-        name: itemName,
-        total: newItemTotal,
-        obtained: 0,
-        considered: true,
-      });
+      initialScores[student.id] = 0;
     });
 
-    setStudentCategories(updatedCategories);
+    // Add new item to structure
+    const updatedStructure = { ...categoryStructure };
+    updatedStructure[selectedCategory].items.push({
+      id: itemId,
+      name: itemName,
+      total: newItemTotal,
+      scores: initialScores,
+      considered: true,
+    });
+
+    setCategoryStructure(updatedStructure);
     setIsAddDialogOpen(false);
     setNewItemTotal(0);
     setNewItemName('');
@@ -167,87 +154,123 @@ const UploadResults = () => {
   };
 
   const handleRemoveAssessment = (category: CategoryType, itemId: string) => {
-    const updatedCategories = { ...studentCategories };
-    students.forEach(student => {
-      if (updatedCategories[student.id]) {
-        updatedCategories[student.id][category].items = 
-          updatedCategories[student.id][category].items.filter(item => item.id !== itemId);
-      }
-    });
-    setStudentCategories(updatedCategories);
+    const updatedStructure = { ...categoryStructure };
+    updatedStructure[category].items = updatedStructure[category].items.filter(item => item.id !== itemId);
+    setCategoryStructure(updatedStructure);
     toast.success('Assessment removed');
   };
 
   const handleEditCategoryMax = (category: CategoryType) => {
-    if (students.length === 0) return;
-    const currentMax = studentCategories[students[0].id]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
+    const currentMax = categoryStructure[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
     setEditingCategory(category);
     setEditingMaxValue(currentMax);
     setIsEditMaxDialogOpen(true);
   };
 
   const handleSaveCategoryMax = () => {
-    if (students.length === 0) return;
-
     // Validate: new max must be >= total of existing assessments
-    const minRequired = students.map(student => {
-      const items = studentCategories[student.id]?.[editingCategory]?.items || [];
-      return items.reduce((sum, item) => sum + item.total, 0);
-    });
-    const maxRequired = Math.max(...minRequired);
+    const items = categoryStructure[editingCategory]?.items || [];
+    const totalUsed = items.reduce((sum, item) => sum + item.total, 0);
 
-    if (editingMaxValue < maxRequired) {
-      toast.error(`New limit cannot be less than total marks of existing assessments (${maxRequired})`);
+    if (editingMaxValue < totalUsed) {
+      toast.error(`New limit cannot be less than total marks of existing assessments (${totalUsed})`);
       return;
     }
 
-    // Update max for all students
-    const updatedCategories = { ...studentCategories };
-    students.forEach(student => {
-      if (updatedCategories[student.id]) {
-        updatedCategories[student.id][editingCategory].max = editingMaxValue;
-      }
-    });
-
-    setStudentCategories(updatedCategories);
+    const updatedStructure = { ...categoryStructure };
+    updatedStructure[editingCategory].max = editingMaxValue;
+    setCategoryStructure(updatedStructure);
     setIsEditMaxDialogOpen(false);
     toast.success(`${DEFAULT_CATEGORY_CONFIG[editingCategory].name} max updated to ${editingMaxValue}`);
   };
 
-  const handleToggleConsidered = (studentId: string, category: CategoryType, itemId: string) => {
-    const updatedCategories = { ...studentCategories };
-    const item = updatedCategories[studentId][category].items.find(i => i.id === itemId);
+  const handleEditItemTotal = (category: CategoryType, itemId: string, currentTotal: number) => {
+    setEditingItem({ category, itemId, currentTotal });
+    setEditingItemTotal(currentTotal);
+    setIsEditItemDialogOpen(true);
+  };
+
+  const handleSaveItemTotal = () => {
+    if (!editingItem) return;
+
+    const { category, itemId, currentTotal } = editingItem;
+
+    if (editingItemTotal <= 0) {
+      toast.error('Total marks must be greater than 0');
+      return;
+    }
+
+    // Check if increase is within available space
+    const increase = editingItemTotal - currentTotal;
+    if (increase > 0) {
+      const available = getCategoryAvailableSpace(category);
+      if (increase > available) {
+        toast.error(`Cannot increase by ${increase}. Only ${available} marks available.`);
+        return;
+      }
+    }
+
+    // Update item total
+    const updatedStructure = { ...categoryStructure };
+    const item = updatedStructure[category].items.find(i => i.id === itemId);
+    if (item) {
+      item.total = editingItemTotal;
+      // Cap existing scores at new total
+      Object.keys(item.scores).forEach(studentId => {
+        if (item.scores[studentId] > editingItemTotal) {
+          item.scores[studentId] = editingItemTotal;
+        }
+      });
+      setCategoryStructure(updatedStructure);
+      toast.success('Assessment total updated');
+    }
+
+    setIsEditItemDialogOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleToggleConsidered = (category: CategoryType, itemId: string) => {
+    const updatedStructure = { ...categoryStructure };
+    const item = updatedStructure[category].items.find(i => i.id === itemId);
     if (item) {
       item.considered = !item.considered;
-      setStudentCategories(updatedCategories);
+      setCategoryStructure(updatedStructure);
     }
   };
 
-  const handleUpdateMark = (studentId: string, category: CategoryType, itemId: string, obtained: number) => {
-    const updatedCategories = { ...studentCategories };
-    const item = updatedCategories[studentId][category].items.find(i => i.id === itemId);
-    if (item) {
-      item.obtained = Math.min(obtained, item.total); // Cap at total
-      setStudentCategories(updatedCategories);
-    }
+  const handleOpenMarksDialog = (category: CategoryType, item: AssessmentItem) => {
+    setMarksDialogData({ category, item });
+    setTempMarks({ ...item.scores });
+    setIsMarksDialogOpen(true);
   };
 
-  const getStudentCategoryTotal = (studentId: string, category: CategoryType): { obtained: number; total: number } => {
-    const items = studentCategories[studentId]?.[category]?.items || [];
-    const consideredItems = items.filter(item => item.considered);
-    return {
-      obtained: consideredItems.reduce((sum, item) => sum + item.obtained, 0),
-      total: consideredItems.reduce((sum, item) => sum + item.total, 0),
-    };
+  const handleSaveMarks = () => {
+    if (!marksDialogData) return;
+
+    const { category, item } = marksDialogData;
+    const updatedStructure = { ...categoryStructure };
+    const targetItem = updatedStructure[category].items.find(i => i.id === item.id);
+    
+    if (targetItem) {
+      targetItem.scores = { ...tempMarks };
+      setCategoryStructure(updatedStructure);
+      toast.success('Marks saved successfully');
+    }
+
+    setIsMarksDialogOpen(false);
+    setMarksDialogData(null);
   };
 
   const getStudentOverallTotal = (studentId: string): number => {
     let total = 0;
     (['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).forEach(category => {
-      const categoryTotal = getStudentCategoryTotal(studentId, category);
-      total += categoryTotal.obtained;
+      const items = categoryStructure[category]?.items || [];
+      const consideredItems = items.filter(item => item.considered);
+      consideredItems.forEach(item => {
+        total += item.scores[studentId] || 0;
+      });
     });
-    return Math.round(total * 100) / 100; // Round to 2 decimals
+    return Math.round(total * 100) / 100;
   };
 
   const handleSave = () => {
@@ -258,18 +281,17 @@ const UploadResults = () => {
 
     try {
       students.forEach(student => {
-        const categories = studentCategories[student.id];
         const overallTotal = getStudentOverallTotal(student.id);
         const grade = calculateGrade(overallTotal);
 
         saveResult({
           courseId: selectedCourse,
           studentId: student.id,
-          categories,
+          categories: categoryStructure,
           overallTotal,
-          total: overallTotal, // for backwards compatibility
+          total: overallTotal,
           grade,
-          assessments: [], // for backwards compatibility
+          assessments: [],
         });
       });
 
@@ -279,18 +301,12 @@ const UploadResults = () => {
     }
   };
 
-  // Get first student's items for display (all students have same assessment structure)
-  const getAssessmentItems = (category: CategoryType): AssessmentItem[] => {
-    if (students.length === 0) return [];
-    return studentCategories[students[0].id]?.[category]?.items || [];
-  };
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-heading font-bold mb-2">Upload Results</h1>
-          <p className="text-muted-foreground">Upload marks and grades for students</p>
+          <p className="text-muted-foreground">Manage assessments and upload marks for students</p>
         </div>
 
         <Card className="p-6">
@@ -315,232 +331,111 @@ const UploadResults = () => {
             {/* Assessment Management */}
             {selectedCourse && students.length > 0 && (
               <>
-                {/* Category-based Assessment Structure */}
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">Assessment Structure</h3>
-                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          Add Assessment
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="bg-card border-border">
-                        <DialogHeader>
-                          <DialogTitle>Add New Assessment</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Category</label>
-                            <Select value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as CategoryType)}>
-                              <SelectTrigger className="bg-muted border-border">
-                                <SelectValue />
-                              </SelectTrigger>
-                               <SelectContent className="bg-card border-border">
-                                {(Object.keys(DEFAULT_CATEGORY_CONFIG) as CategoryType[]).map(cat => {
-                                  const available = students.length > 0 ? getCategoryAvailableSpace(cat, students[0].id) : 0;
-                                  const max = students.length > 0 ? (studentCategories[students[0].id]?.[cat]?.max || DEFAULT_CATEGORY_CONFIG[cat].max) : DEFAULT_CATEGORY_CONFIG[cat].max;
-                                  return (
-                                    <SelectItem 
-                                      key={cat} 
-                                      value={cat}
-                                      disabled={available <= 0}
-                                    >
-                                      {DEFAULT_CATEGORY_CONFIG[cat].name} (Available: {available}/{max})
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Assessment Name (Optional)</label>
-                            <Input
-                              value={newItemName}
-                              onChange={(e) => setNewItemName(e.target.value)}
-                              placeholder="e.g., Quiz 1, Assignment 2"
-                              className="bg-muted border-border"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Total Marks</label>
-                            <Input
-                              type="number"
-                              value={newItemTotal || ''}
-                              onChange={(e) => setNewItemTotal(Number(e.target.value))}
-                              min="0"
-                              max={students.length > 0 ? getCategoryAvailableSpace(selectedCategory, students[0].id) : 0}
-                              className="bg-muted border-border"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Available space: {students.length > 0 ? getCategoryAvailableSpace(selectedCategory, students[0].id) : 0} marks
-                            </p>
-                          </div>
-                          <Button onClick={handleAddAssessment} className="w-full">
-                            Add Assessment
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Assessment Structure</h3>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="gap-2"
+                    onClick={() => setIsAddDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Assessment
+                  </Button>
+                </div>
+
+                {/* Categories Display */}
+                {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
+                  const items = categoryStructure[category]?.items || [];
+                  const currentMax = categoryStructure[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max;
+                  const used = getCategoryUsedTotal(category);
+                  const available = getCategoryAvailableSpace(category);
+
+                  return (
+                    <div key={category} className="p-4 rounded-lg border border-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-primary">{DEFAULT_CATEGORY_CONFIG[category].name}</h4>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-muted-foreground">
+                            {used} / {currentMax} | Remaining: {available}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditCategoryMax(category)}
+                            className="h-7 text-xs"
+                          >
+                            Edit Max
                           </Button>
                         </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                      </div>
 
-                  {/* Display Categories */}
-                  {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
-                    const items = getAssessmentItems(category);
-                    const currentMax = students.length > 0 ? (studentCategories[students[0].id]?.[category]?.max || DEFAULT_CATEGORY_CONFIG[category].max) : DEFAULT_CATEGORY_CONFIG[category].max;
-                    const available = students.length > 0 ? getCategoryAvailableSpace(category, students[0].id) : currentMax;
-
-                    return (
-                      <div key={category} className="p-4 rounded-lg border border-border space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-primary">{DEFAULT_CATEGORY_CONFIG[category].name}</h4>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm text-muted-foreground">
-                              Max: {currentMax} marks | Remaining: {available}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditCategoryMax(category)}
-                              className="h-7 text-xs"
-                            >
-                              Edit Max
-                            </Button>
-                          </div>
-                        </div>
+                      {items.length > 0 ? (
                         <div className="space-y-2">
                           {items.map(item => (
-                            <div key={item.id} className="flex items-center gap-2 p-2 rounded bg-muted/50">
-                              <span className="flex-1 text-sm">{item.name || 'Unnamed'}</span>
-                              <span className="text-sm text-muted-foreground">({item.total} marks)</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleRemoveAssessment(category, item.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                            <div 
+                              key={item.id} 
+                              className={`flex items-center justify-between p-3 rounded border ${
+                                item.considered ? 'border-primary/30 bg-primary/5' : 'border-border/50 opacity-60'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <button
+                                  onClick={() => handleToggleConsidered(category, item.id)}
+                                  className="flex items-center gap-2"
+                                  title={item.considered ? 'Click to ignore' : 'Click to consider'}
+                                >
+                                  {item.considered ? (
+                                    <Eye className="h-4 w-4 text-primary" />
+                                  ) : (
+                                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </button>
+                                <span className="font-medium">{item.name}</span>
+                                <span className="text-sm text-muted-foreground">Total: {item.total}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditItemTotal(category, item.id, item.total)}
+                                  className="h-8 px-2"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleOpenMarksDialog(category, item)}
+                                  className="h-8 px-3 text-primary"
+                                >
+                                  Enter Marks
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveAssessment(category, item.id)}
+                                  className="h-8 px-2 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
-                      </div>
-                        );
-                      })}
-                    </div>
-
-                {/* Edit Category Max Dialog */}
-                <Dialog open={isEditMaxDialogOpen} onOpenChange={setIsEditMaxDialogOpen}>
-                  <DialogContent className="bg-card border-border">
-                    <DialogHeader>
-                      <DialogTitle>Edit {DEFAULT_CATEGORY_CONFIG[editingCategory].name} Maximum Marks</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Maximum Absolute Marks</label>
-                        <Input
-                          type="number"
-                          value={editingMaxValue || ''}
-                          onChange={(e) => setEditingMaxValue(Number(e.target.value))}
-                          min="0"
-                          className="bg-muted border-border"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Current assessments total: {students.length > 0 ? 
-                            (studentCategories[students[0].id]?.[editingCategory]?.items || [])
-                              .reduce((sum, item) => sum + item.total, 0) : 0} marks
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-2">
+                          No assessments added yet
                         </p>
-                      </div>
-                      <Button onClick={handleSaveCategoryMax} className="w-full">
-                        Save Maximum
-                      </Button>
+                      )}
                     </div>
-                  </DialogContent>
-                </Dialog>
+                  );
+                })}
 
-                {/* Student Marks Entry */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg">Enter Student Marks</h3>
-                  {students.map(student => (
-                    <div key={student.id} className="p-4 rounded-lg border border-border space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-semibold text-primary">
-                              {student.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                            </span>
-                          </div>
-                          <span className="font-medium">{student.name}</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-muted-foreground">Total</p>
-                          <p className="text-2xl font-bold">{getStudentOverallTotal(student.id)}/100</p>
-                          <p className="text-sm font-semibold text-primary">
-                            Grade: {calculateGrade(getStudentOverallTotal(student.id))}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Categories */}
-                      {(['quiz', 'assignment', 'midterm', 'final'] as CategoryType[]).map(category => {
-                        const items = studentCategories[student.id]?.[category]?.items || [];
-                        if (items.length === 0) return null;
-
-                        const categoryTotals = getStudentCategoryTotal(student.id, category);
-
-                        return (
-                          <div key={category} className="space-y-2">
-                            <div className="flex items-center justify-between px-2">
-                              <h5 className="text-sm font-semibold text-primary">{DEFAULT_CATEGORY_CONFIG[category].name}</h5>
-                              <span className="text-sm font-medium">
-                                {categoryTotals.obtained}/{categoryTotals.total}
-                              </span>
-                            </div>
-                            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                              {items.map(item => (
-                                <div key={item.id} className="relative">
-                                  <div className={`space-y-1 p-2 rounded border ${item.considered ? 'border-border' : 'border-muted opacity-50'}`}>
-                                    <div className="flex items-center justify-between">
-                                      <label className="text-xs font-medium">
-                                        {item.name} ({item.total}m)
-                                      </label>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={() => handleToggleConsidered(student.id, category, item.id)}
-                                      >
-                                        {item.considered ? (
-                                          <Eye className="h-3 w-3" />
-                                        ) : (
-                                          <EyeOff className="h-3 w-3" />
-                                        )}
-                                      </Button>
-                                    </div>
-                                    <Input
-                                      type="number"
-                                      value={item.obtained || 0}
-                                      onChange={(e) => handleUpdateMark(student.id, category, item.id, Number(e.target.value))}
-                                      min="0"
-                                      max={item.total}
-                                      step="0.5"
-                                      disabled={!item.considered}
-                                      className="h-8 bg-muted border-border text-sm"
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-
-                <Button onClick={handleSave} className="w-full neon-glow">
-                  Save Results
+                {/* Save Button */}
+                <Button onClick={handleSave} className="w-full" size="lg">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save All Results
                 </Button>
               </>
             )}
@@ -552,6 +447,168 @@ const UploadResults = () => {
             )}
           </div>
         </Card>
+
+        {/* Add Assessment Dialog */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>Add New Assessment</DialogTitle>
+              <DialogDescription>Create a new assessment item for a category</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Category</label>
+                <Select value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as CategoryType)}>
+                  <SelectTrigger className="bg-muted border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {(Object.keys(DEFAULT_CATEGORY_CONFIG) as CategoryType[]).map(cat => {
+                      const available = getCategoryAvailableSpace(cat);
+                      const max = categoryStructure[cat]?.max || DEFAULT_CATEGORY_CONFIG[cat].max;
+                      return (
+                        <SelectItem 
+                          key={cat} 
+                          value={cat}
+                          disabled={available <= 0}
+                        >
+                          {DEFAULT_CATEGORY_CONFIG[cat].name} {available <= 0 ? '(Full)' : `(${available}/${max} available)`}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Assessment Name (Optional)</label>
+                <Input
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  placeholder="e.g., Quiz 1, Assignment 2"
+                  className="bg-muted border-border"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Total Marks</label>
+                <Input
+                  type="number"
+                  value={newItemTotal || ''}
+                  onChange={(e) => setNewItemTotal(Number(e.target.value))}
+                  min="0"
+                  max={getCategoryAvailableSpace(selectedCategory)}
+                  className="bg-muted border-border"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Available space: {getCategoryAvailableSpace(selectedCategory)} marks
+                </p>
+              </div>
+              <Button 
+                onClick={handleAddAssessment} 
+                className="w-full"
+                disabled={getCategoryAvailableSpace(selectedCategory) <= 0}
+              >
+                Add Assessment
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Category Max Dialog */}
+        <Dialog open={isEditMaxDialogOpen} onOpenChange={setIsEditMaxDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>Edit {DEFAULT_CATEGORY_CONFIG[editingCategory]?.name} Maximum</DialogTitle>
+              <DialogDescription>Set the total absolute marks for this category</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Maximum Marks</label>
+                <Input
+                  type="number"
+                  value={editingMaxValue || ''}
+                  onChange={(e) => setEditingMaxValue(Number(e.target.value))}
+                  min="0"
+                  className="bg-muted border-border"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Current total used: {getCategoryUsedTotal(editingCategory)} marks
+                </p>
+              </div>
+              <Button onClick={handleSaveCategoryMax} className="w-full">
+                Save Maximum
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Item Total Dialog */}
+        <Dialog open={isEditItemDialogOpen} onOpenChange={setIsEditItemDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>Edit Assessment Total</DialogTitle>
+              <DialogDescription>Change the total marks for this assessment</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Total Marks</label>
+                <Input
+                  type="number"
+                  value={editingItemTotal || ''}
+                  onChange={(e) => setEditingItemTotal(Number(e.target.value))}
+                  min="0"
+                  className="bg-muted border-border"
+                />
+                {editingItem && (
+                  <p className="text-xs text-muted-foreground">
+                    Current: {editingItem.currentTotal} | Available for increase: {getCategoryAvailableSpace(editingItem.category)}
+                  </p>
+                )}
+              </div>
+              <Button onClick={handleSaveItemTotal} className="w-full">
+                Save Total
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Marks Entry Dialog */}
+        <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>
+          <DialogContent className="bg-card border-border max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Enter Marks: {marksDialogData?.item.name}
+              </DialogTitle>
+              <DialogDescription>
+                Total marks: {marksDialogData?.item.total}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {students.map(student => (
+                <div key={student.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                  <span className="font-medium">{student.name}</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={tempMarks[student.id] ?? 0}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        const capped = Math.min(value, marksDialogData?.item.total || 0);
+                        setTempMarks(prev => ({ ...prev, [student.id]: capped }));
+                      }}
+                      min="0"
+                      max={marksDialogData?.item.total || 0}
+                      className="w-20 bg-muted border-border"
+                    />
+                    <span className="text-sm text-muted-foreground">/ {marksDialogData?.item.total}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button onClick={handleSaveMarks} className="w-full">
+              Save Marks
+            </Button>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
