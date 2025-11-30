@@ -45,9 +45,12 @@ const ViewRecords = () => {
       return {
         studentName: student?.name || 'Unknown',
         course: course ? `${course.name} (${course.code})` : 'Unknown',
+        quiz: result.quiz || 0,
+        assignment: result.assignment || 0,
+        mid: result.mid || 0,
+        final: result.final || 0,
         total: result.total || 0,
         grade: result.grade || 'N/A',
-        assessments: result.assessments || []
       };
     });
     setResultsData(processedResults);
@@ -122,7 +125,10 @@ const ViewRecords = () => {
                     <TableRow className="bg-muted/50">
                       <TableHead>Student Name</TableHead>
                       <TableHead>Course</TableHead>
-                      <TableHead>Assessments</TableHead>
+                      <TableHead>Quiz</TableHead>
+                      <TableHead>Assignment</TableHead>
+                      <TableHead>Midterm</TableHead>
+                      <TableHead>Final</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Grade</TableHead>
                     </TableRow>
@@ -130,7 +136,7 @@ const ViewRecords = () => {
                   <TableBody>
                     {resultsData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           No result records found
                         </TableCell>
                       </TableRow>
@@ -139,15 +145,10 @@ const ViewRecords = () => {
                         <TableRow key={index}>
                           <TableCell className="font-medium">{record.studentName}</TableCell>
                           <TableCell>{record.course}</TableCell>
-                          <TableCell>
-                            <div className="text-xs space-y-1">
-                              {record.assessments.map((a: any, i: number) => (
-                                <div key={i}>
-                                  {a.type}: {a.obtained}/{a.weight}
-                                </div>
-                              ))}
-                            </div>
-                          </TableCell>
+                          <TableCell className="text-sm">{record.quiz}/10</TableCell>
+                          <TableCell className="text-sm">{record.assignment}/10</TableCell>
+                          <TableCell className="text-sm">{record.mid}/30</TableCell>
+                          <TableCell className="text-sm">{record.final}/50</TableCell>
                           <TableCell className="font-semibold">{record.total}/100</TableCell>
                           <TableCell>
                             <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">

@@ -31,37 +31,14 @@ export interface AttendanceRecord {
   }>;
 }
 
-export interface Assessment {
-  type: string;
-  weight: number;
-  obtained: number;
-}
-
-export interface AssessmentItem {
-  id: string;
-  total: number;
-  scores: { [studentId: string]: number }; // obtained marks per student
-  considered: boolean;
-  name?: string; // optional name like "Quiz 1", "Assignment 2"
-}
-
-export interface CategoryData {
-  max: number;
-  items: AssessmentItem[];
-}
-
 export interface ResultRecord {
   courseId: string;
   studentId: string;
-  assessments?: Assessment[]; // kept for backwards compatibility
-  categories?: {
-    quiz: CategoryData;
-    assignment: CategoryData;
-    midterm: CategoryData;
-    final: CategoryData;
-  };
-  overallTotal: number;
-  total: number; // kept for backwards compatibility
+  quiz: number;
+  assignment: number;
+  mid: number;
+  final: number;
+  total: number;
   grade: string;
 }
 
