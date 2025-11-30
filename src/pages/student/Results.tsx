@@ -76,7 +76,10 @@ const StudentResults = () => {
           const categorySum = validResults.reduce((sum, r) => {
             const items = r.categories[category].items || [];
             const consideredItems = items.filter((item: any) => item.considered);
-            const obtained = consideredItems.reduce((s: number, item: any) => s + item.obtained, 0);
+            const obtained = consideredItems.reduce((s: number, item: any) => {
+              const studentScore = item.scores?.[r.studentId] ?? 0;
+              return s + studentScore;
+            }, 0);
             return sum + obtained;
           }, 0);
           categoryAverages[category] = Math.round(categorySum / validResults.length * 100) / 100;
@@ -92,11 +95,14 @@ const StudentResults = () => {
     }
   }, [authUser, selectedCourse]);
 
-  const getCategoryTotal = (category: CategoryData): { obtained: number; total: number } => {
+  const getCategoryTotal = (category: CategoryData, studentId: string): { obtained: number; total: number } => {
     const items = category?.items || [];
     const consideredItems = items.filter(item => item.considered);
     return {
-      obtained: consideredItems.reduce((sum, item) => sum + item.obtained, 0),
+      obtained: consideredItems.reduce((sum, item) => {
+        const score = item.scores?.[studentId] ?? 0;
+        return sum + score;
+      }, 0),
       total: consideredItems.reduce((sum, item) => sum + item.total, 0),
     };
   };
@@ -186,7 +192,7 @@ const StudentResults = () => {
                       const categoryData = courseResult.categories[category];
                       if (!categoryData || categoryData.items.length === 0) return null;
 
-                      const categoryTotals = getCategoryTotal(categoryData);
+                      const categoryTotals = getCategoryTotal(categoryData, authUser?.id || '');
                       const consideredItems = categoryData.items.filter((item: any) => item.considered);
                       const categoryMax = categoryData.max || 0;
                       const remainingMarks = categoryMax - categoryTotals.total;
@@ -214,25 +220,28 @@ const StudentResults = () => {
 
                           {/* Individual Items */}
                           <div className="grid gap-3 md:grid-cols-2">
-                            {consideredItems.map((item: any, index: number) => (
-                              <div key={item.id || index} className="p-3 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium">{item.name || `Item ${index + 1}`}</span>
-                                  <span className="text-lg font-bold">{item.obtained}/{item.total}</span>
+                            {consideredItems.map((item: any, index: number) => {
+                              const obtained = item.scores?.[authUser?.id || ''] ?? 0;
+                              return (
+                                <div key={item.id || index} className="p-3 rounded-lg border border-border hover:border-primary/50 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">{item.name || `Item ${index + 1}`}</span>
+                                    <span className="text-lg font-bold">{obtained}/{item.total}</span>
+                                  </div>
+                                  
+                                  {/* Progress Bar */}
+                                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500"
+                                      style={{ width: `${(obtained / item.total) * 100}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 text-right">
+                                    {Math.round((obtained / item.total) * 100)}%
+                                  </p>
                                 </div>
-                                
-                                {/* Progress Bar */}
-                                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500"
-                                    style={{ width: `${(item.obtained / item.total) * 100}%` }}
-                                  />
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1 text-right">
-                                  {Math.round((item.obtained / item.total) * 100)}%
-                                </p>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       );
