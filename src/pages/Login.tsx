@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { GraduationCap, LogIn } from 'lucide-react';
-import { login } from '@/lib/auth';
+import { login, loginParent } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -22,15 +22,27 @@ const Login = () => {
     setLoading(true);
 
     setTimeout(() => {
-      const user = login(username, password);
-      
-      if (user && user.role === role) {
-        toast.success(`Welcome back, ${user.name}!`);
-        navigate(`/${role}`);
-      } else if (user && user.role !== role) {
-        toast.error(`Invalid role selected. This account is a ${user.role}.`);
+      if (role === 'parent') {
+        // Parent login uses email instead of username
+        const parent = loginParent(username, password);
+        if (parent) {
+          localStorage.setItem('portal_current_parent', JSON.stringify(parent));
+          toast.success(`Welcome back, ${parent.name}!`);
+          navigate('/parent');
+        } else {
+          toast.error('Invalid credentials. Please try again.');
+        }
       } else {
-        toast.error('Invalid credentials. Please try again.');
+        const user = login(username, password);
+        
+        if (user && user.role === role) {
+          toast.success(`Welcome back, ${user.name}!`);
+          navigate(`/${role}`);
+        } else if (user && user.role !== role) {
+          toast.error(`Invalid role selected. This account is a ${user.role}.`);
+        } else {
+          toast.error('Invalid credentials. Please try again.');
+        }
       }
       
       setLoading(false);
@@ -66,17 +78,18 @@ const Login = () => {
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="teacher">Teacher</SelectItem>
                 <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="parent">Parent</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Username */}
+          {/* Username/Email */}
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">{role === 'parent' ? 'Email' : 'Username'}</Label>
             <Input
               id="username"
-              type="text"
-              placeholder="Enter your username"
+              type={role === 'parent' ? 'email' : 'text'}
+              placeholder={role === 'parent' ? 'Enter your email' : 'Enter your username'}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required

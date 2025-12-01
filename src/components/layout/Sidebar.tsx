@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, ClipboardList, BarChart3, LogOut, BookOpen, UserPlus, UsersRound } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, ClipboardList, BarChart3, LogOut, BookOpen, UserPlus, UsersRound, Baby } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { getAuthUser, logout } from '@/lib/auth';
 import { useNavigate } from 'react-router-dom';
@@ -36,9 +36,14 @@ export const Sidebar = () => {
     { to: '/student/results', icon: BarChart3, label: 'My Results' },
   ];
 
+  const parentLinks = [
+    { to: '/parent', icon: LayoutDashboard, label: 'Dashboard' },
+  ];
+
   let links = studentLinks;
   if (user?.role === 'admin') links = adminLinks;
   if (user?.role === 'teacher') links = teacherLinks;
+  if (user?.role === 'parent') links = parentLinks;
 
   return (
     <aside className="w-64 border-r border-border bg-card/30 backdrop-blur-sm flex flex-col animate-slide-in">

@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserPlus, Trash2, Edit } from 'lucide-react';
-import { getUsers, saveUser, deleteUser } from '@/lib/storage';
-import { User, UserRole } from '@/lib/types';
+import { getUsers, saveUser, deleteUser, getParents, saveParent, deleteParent } from '@/lib/storage';
+import { User, UserRole, Parent } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
 const ManageUsers = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [parents, setParents] = useState<Parent[]>([]);
   const [formData, setFormData] = useState({
     id: '',
     username: '',
@@ -22,15 +23,27 @@ const ManageUsers = () => {
     role: 'student' as UserRole,
     profileImage: 'default',
   });
+  const [parentFormData, setParentFormData] = useState({
+    id: '',
+    name: '',
+    email: '',
+    password: '',
+    studentId: '',
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>('default');
 
   useEffect(() => {
     loadUsers();
+    loadParents();
   }, []);
 
   const loadUsers = () => {
     setUsers(getUsers());
+  };
+
+  const loadParents = () => {
+    setParents(getParents());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -111,6 +124,41 @@ const ManageUsers = () => {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const handleParentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newParent: Parent = {
+      ...parentFormData,
+      id: parentFormData.id || Date.now().toString(),
+    };
+
+    saveParent(newParent);
+    toast.success('Parent added successfully');
+    
+    resetParentForm();
+    loadParents();
+  };
+
+  const handleDeleteParent = (parentId: string) => {
+    if (window.confirm('Are you sure you want to delete this parent?')) {
+      deleteParent(parentId);
+      toast.success('Parent deleted successfully');
+      loadParents();
+    }
+  };
+
+  const resetParentForm = () => {
+    setParentFormData({
+      id: '',
+      name: '',
+      email: '',
+      password: '',
+      studentId: '',
+    });
+  };
+
+  const students = users.filter(u => u.role === 'student');
 
   return (
     <DashboardLayout>
@@ -270,6 +318,113 @@ const ManageUsers = () => {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        {/* Parents Section */}
+        <Card className="p-6">
+          <h2 className="text-xl font-heading font-semibold mb-4">Parents</h2>
+          
+          {/* Add Parent Form */}
+          <form onSubmit={handleParentSubmit} className="space-y-4 mb-6 p-4 rounded-lg bg-muted/30">
+            <h3 className="font-semibold">Add New Parent</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="parentName">Parent Name</Label>
+                <Input
+                  id="parentName"
+                  value={parentFormData.name}
+                  onChange={(e) => setParentFormData({ ...parentFormData, name: e.target.value })}
+                  required
+                  className="bg-muted border-border"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="parentEmail">Email</Label>
+                <Input
+                  id="parentEmail"
+                  type="email"
+                  value={parentFormData.email}
+                  onChange={(e) => setParentFormData({ ...parentFormData, email: e.target.value })}
+                  required
+                  className="bg-muted border-border"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="parentPassword">Password</Label>
+                <Input
+                  id="parentPassword"
+                  type="password"
+                  value={parentFormData.password}
+                  onChange={(e) => setParentFormData({ ...parentFormData, password: e.target.value })}
+                  required
+                  className="bg-muted border-border"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="studentSelect">Select Student</Label>
+                <Select value={parentFormData.studentId} onValueChange={(value) => setParentFormData({ ...parentFormData, studentId: value })}>
+                  <SelectTrigger className="bg-muted border-border">
+                    <SelectValue placeholder="Choose student" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button type="submit" className="neon-glow">
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Parent
+            </Button>
+          </form>
+
+          {/* Parents List */}
+          <div className="rounded-md border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Parent Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Child</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      No parents added yet
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  parents.map((parent) => {
+                    const student = users.find(u => u.id === parent.studentId);
+                    return (
+                      <TableRow key={parent.id}>
+                        <TableCell className="font-medium">{parent.name}</TableCell>
+                        <TableCell>{parent.email}</TableCell>
+                        <TableCell>{student?.name || 'Unknown Student'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteParent(parent.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>

@@ -1,4 +1,4 @@
-import { User, AttendanceRecord, ResultRecord, Course } from './types';
+import { User, AttendanceRecord, ResultRecord, Course, Parent } from './types';
 
 const STORAGE_KEYS = {
   USERS: 'portal_users',
@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   RESULTS: 'portal_results',
   COURSES: 'portal_courses',
   CURRENT_USER: 'portal_current_user',
+  PARENTS: 'portal_parents',
 };
 
 // Initialize default data
@@ -58,6 +59,10 @@ export const initializeStorage = () => {
 
   if (!localStorage.getItem(STORAGE_KEYS.RESULTS)) {
     localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify([]));
+  }
+
+  if (!localStorage.getItem(STORAGE_KEYS.PARENTS)) {
+    localStorage.setItem(STORAGE_KEYS.PARENTS, JSON.stringify([]));
   }
 };
 
@@ -168,6 +173,28 @@ export const setCurrentUser = (user: User | null) => {
   } else {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   }
+};
+
+// Parents
+export const getParents = (): Parent[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.PARENTS);
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveParent = (parent: Parent) => {
+  const parents = getParents();
+  const index = parents.findIndex(p => p.id === parent.id);
+  if (index >= 0) {
+    parents[index] = parent;
+  } else {
+    parents.push(parent);
+  }
+  localStorage.setItem(STORAGE_KEYS.PARENTS, JSON.stringify(parents));
+};
+
+export const deleteParent = (parentId: string) => {
+  const parents = getParents().filter(p => p.id !== parentId);
+  localStorage.setItem(STORAGE_KEYS.PARENTS, JSON.stringify(parents));
 };
 
 // Calculate grade based on percentage
