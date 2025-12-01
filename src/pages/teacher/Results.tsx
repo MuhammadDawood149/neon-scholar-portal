@@ -40,7 +40,7 @@ const UploadResults = () => {
         setMarks({ quiz: '', assignment: '', mid: '', final: '' });
       }
     }
-  }, [selectedCourse, courses]);
+  }, [selectedCourse]);
 
   useEffect(() => {
     if (selectedCourse && selectedStudent) {
