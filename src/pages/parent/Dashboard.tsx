@@ -28,10 +28,13 @@ const ParentDashboard = () => {
     let present = 0;
     let absent = 0;
     studentAttendance.forEach(record => {
-      record.records.forEach(r => {
-        if (r.status === 'present') present++;
-        else absent++;
-      });
+      // Safety check: ensure records array exists
+      if (record.records && Array.isArray(record.records)) {
+        record.records.forEach(r => {
+          if (r.status === 'present') present++;
+          else absent++;
+        });
+      }
     });
 
     const total = present + absent;
