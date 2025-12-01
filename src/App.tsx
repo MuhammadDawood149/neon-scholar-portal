@@ -29,6 +29,9 @@ import StudentAttendance from "./pages/student/Attendance";
 import StudentResults from "./pages/student/Results";
 import StudentCourses from "./pages/student/Courses";
 
+// Parent
+import ParentDashboard from "./pages/parent/Dashboard";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -61,6 +64,9 @@ const App = () => (
           <Route path="/student/courses" element={<StudentCourses />} />
           <Route path="/student/attendance" element={<StudentAttendance />} />
           <Route path="/student/results" element={<StudentResults />} />
+
+          {/* Parent Routes */}
+          <Route path="/parent" element={<ParentDashboard />} />
 
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

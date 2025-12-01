@@ -1,5 +1,5 @@
-import { User } from './types';
-import { getUsers, setCurrentUser, getCurrentUser } from './storage';
+import { User, Parent } from './types';
+import { getUsers, setCurrentUser, getCurrentUser, getParents } from './storage';
 
 export const login = (username: string, password: string): User | null => {
   const users = getUsers();
@@ -11,6 +11,11 @@ export const login = (username: string, password: string): User | null => {
   }
   
   return null;
+};
+
+export const loginParent = (email: string, password: string): Parent | null => {
+  const parents = getParents();
+  return parents.find(p => p.email === email && p.password === password) || null;
 };
 
 export const logout = () => {
