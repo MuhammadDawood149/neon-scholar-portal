@@ -24,13 +24,18 @@ const Login = () => {
     setTimeout(() => {
       if (role === 'parent') {
         // Parent login uses email instead of username
+        console.log('Attempting parent login with email:', username);
         const parent = loginParent(username, password);
+        console.log('Parent login result:', parent);
+        
         if (parent) {
           localStorage.setItem('portal_current_parent', JSON.stringify(parent));
           toast.success(`Welcome back, ${parent.name}!`);
           navigate('/parent');
         } else {
-          toast.error('Invalid credentials. Please try again.');
+          const parents = JSON.parse(localStorage.getItem('portal_parents') || '[]');
+          console.log('Available parents in storage:', parents);
+          toast.error('Invalid email or password. Please check your credentials.');
         }
       } else {
         const user = login(username, password);
