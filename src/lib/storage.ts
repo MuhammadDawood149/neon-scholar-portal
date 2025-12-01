@@ -170,11 +170,19 @@ export const setCurrentUser = (user: User | null) => {
   }
 };
 
-// Calculate grade
+// Calculate grade based on percentage
 export const calculateGrade = (total: number): string => {
-  if (total >= 90) return 'A';
-  if (total >= 80) return 'B';
-  if (total >= 70) return 'C';
-  if (total >= 60) return 'D';
+  const percentage = total; // Total is already out of 100
+  if (percentage >= 90) return 'A+';
+  if (percentage >= 86) return 'A';
+  if (percentage >= 82) return 'A-';
+  if (percentage >= 78) return 'B+';
+  if (percentage >= 74) return 'B';
+  if (percentage >= 70) return 'B-';
+  if (percentage >= 66) return 'C+';
+  if (percentage >= 62) return 'C';
+  if (percentage >= 58) return 'C-';
+  if (percentage >= 54) return 'D+';
+  if (percentage >= 50) return 'D';
   return 'F';
 };

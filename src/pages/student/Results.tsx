@@ -109,7 +109,7 @@ const StudentResults = () => {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Total Score</p>
-                        <p className="text-3xl font-heading font-bold">{courseResult.total}/100</p>
+                        <p className="text-3xl font-heading font-bold">{courseResult.total}%</p>
                       </div>
                     </div>
                   </Card>
@@ -161,14 +161,18 @@ const StudentResults = () => {
 
                     {/* Total */}
                     <div className="mt-6 p-6 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-xl font-heading font-bold">Total</h3>
-                          <p className="text-sm text-muted-foreground mt-1">Combined score</p>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between pb-3 border-b border-border">
+                          <span className="text-sm text-muted-foreground">Total</span>
+                          <span className="text-lg font-semibold">{courseResult.total} / 100</span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-4xl font-heading font-bold text-primary">{courseResult.total} / 100</p>
-                          <p className="text-xl font-semibold mt-1">Grade: {courseResult.grade}</p>
+                        <div className="flex items-center justify-between pb-3 border-b border-border">
+                          <span className="text-sm text-muted-foreground">Percentage</span>
+                          <span className="text-lg font-semibold">{courseResult.total}%</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-sm text-muted-foreground">Grade</span>
+                          <span className="text-3xl font-heading font-bold text-primary">{courseResult.grade}</span>
                         </div>
                       </div>
                     </div>
