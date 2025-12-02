@@ -14,14 +14,18 @@ const isParentAuthenticated = (): boolean => {
   return parentData !== null;
 };
 
+// Check if current route is for parent role
+const isParentRoute = (pathname: string): boolean => {
+  return pathname.startsWith('/parent');
+};
+
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isParent = isParentRoute(location.pathname);
 
   useEffect(() => {
-    const isParentRoute = location.pathname.startsWith('/parent');
-    
-    if (isParentRoute) {
+    if (isParent) {
       // Parent routes only check parent authentication
       if (!isParentAuthenticated()) {
         navigate('/login');
@@ -32,14 +36,15 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         navigate('/login');
       }
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, isParent]);
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 p-6 overflow-auto">
+        {/* Hide sidebar for parent role */}
+        {!isParent && <Sidebar />}
+        <main className={`flex-1 p-6 overflow-auto ${isParent ? 'w-full' : ''}`}>
           <div className="max-w-7xl mx-auto animate-fade-in">
             {children}
           </div>
