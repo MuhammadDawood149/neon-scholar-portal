@@ -1,8 +1,8 @@
 import { User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getAuthUser, logout } from '@/lib/auth';
-import { getUsers } from '@/lib/storage';
-import { useNavigate } from 'react-router-dom';
+import { getUsers, getParents } from '@/lib/storage';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
   DropdownMenu,
@@ -15,16 +15,31 @@ import {
 
 export const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const authUser = getAuthUser();
   const [user, setUser] = useState(authUser);
+  const [parentData, setParentData] = useState<{ id: string; name: string; email: string } | null>(null);
+  
+  const isParentRoute = location.pathname.startsWith('/parent');
 
   useEffect(() => {
-    if (authUser) {
+    if (isParentRoute) {
+      // Load parent data from localStorage
+      const currentParent = localStorage.getItem('portal_current_parent');
+      if (currentParent) {
+        const parsed = JSON.parse(currentParent);
+        const parents = getParents();
+        const parent = parents.find(p => p.id === parsed.id);
+        if (parent) {
+          setParentData({ id: parent.id, name: parent.name, email: parent.email });
+        }
+      }
+    } else if (authUser) {
       const users = getUsers();
       const fullUser = users.find(u => u.id === authUser.id);
       if (fullUser) setUser(fullUser);
     }
-  }, [authUser]);
+  }, [authUser, isParentRoute]);
 
   const getInitials = (name: string) => {
     return name
@@ -37,6 +52,11 @@ export const Navbar = () => {
 
   const handleLogout = () => {
     logout();
+    navigate('/login');
+  };
+
+  const handleParentLogout = () => {
+    localStorage.removeItem('portal_current_parent');
     navigate('/login');
   };
 
@@ -53,7 +73,27 @@ export const Navbar = () => {
           </div>
         </div>
 
-        {user && (
+        {/* Parent logout button */}
+        {isParentRoute && parentData && (
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium">{parentData.name}</p>
+              <p className="text-xs text-muted-foreground">Parent</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleParentLogout}
+              className="flex items-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </div>
+        )}
+
+        {/* Regular user dropdown */}
+        {!isParentRoute && user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full p-0 w-10 h-10 border-2 border-primary/30 overflow-hidden shadow-[0_0_6px_rgba(58,180,255,0.3)] hover:scale-105 transition-transform">
